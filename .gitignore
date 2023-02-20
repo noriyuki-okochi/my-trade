@@ -1,0 +1,7 @@
+venv
+Untitled.ipynb
+*.html
+sample.py
+src/.ipynb_checkpoints
+src/__pycache__
+src/*/__pycache__
