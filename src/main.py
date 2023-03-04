@@ -32,11 +32,38 @@ cmdline = f"{args[0]}"
 if len(args) > 1:
     cmdline += f" {args[1]}"
 print(cmdline)
-
+        
 # connect AUto-trade.db
 db = MyDb(DB_PATH)
 
+# check option to delete rate-logs.
+#     -d{9}..[y|m|d]
+opts = [opt[2:] for opt in args if opt.startswith('-d')]
+if len(opts) > 0:
+    deloptstr = opts[0] 
+    if not deloptstr[-1] in ['d','m', 'y']:
+        deloptstr += 'y'
+    if deloptstr[:len(deloptstr)-1].isnumeric():
+        delval = int(deloptstr[:len(deloptstr)-1])
+        if delval != None:
+            print(f"log-delete option:{deloptstr}")
+            last_datetime = last_datetime(delval, deloptstr[-1]) 
+            print(f"The last-datetime is {last_datetime}. Are you sure?[y/n].")
+            ans = input('>')
+            if ans == 'y':
+                db.delete_ratelogs(last_datetime)
+    else:
+        print(f"log-delete option:illegal parameter.")
+        print("option: -d{9}...[y(default)|m|d]")
+    db.close()
+    exit() 
+
 print('<< Auto-trade start >>')
+if delval != None:
+    last_datetime = last_datetime(delval, delopt) 
+    db.delete_ratelogs(last_datetime)
+    print(f"the rate-logs before {last_datetime} have deleted.")
+
 #
 # 自動取引のトリガー（レート値）登録
 # BTC

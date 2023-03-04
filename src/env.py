@@ -28,7 +28,14 @@ SLEEP_DAYS = os.getenv('SLEEP_DAYS')
 if SLEEP_DAYS == None:
     SLEEP_DAYS = 1
 sleep_time = (60*60*24)*float(SLEEP_DAYS)
-
+#
+#過去サンプリングログの削除
+delval = os.getenv('DEL_SPAN_VALUE')
+if delval != None:
+    delval = int(delval)
+    delopt = os.getenv('DEL_SPAN_OPT')
+    if delopt == None:
+        delopt = 'y'
 #
 # チャート表示コイン
 #

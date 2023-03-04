@@ -10,6 +10,7 @@ import pandas
 #import json
 import time
 from datetime import datetime
+from datetime import timedelta
 #
 # Private API Class for sqlite3
 #
@@ -65,7 +66,7 @@ class MyDb:
             + f"{time_epoc})"
         self.cur.execute(sql)
         self.conn.commit()
-
+ 
     def insert_trigger(self, symbol, trade, ratelist):
         # delete old datas
         sql = "delete from trigger where "\
@@ -171,4 +172,16 @@ class MyDb:
 #        return pandas.read_sql_query(sql, con=self.conn, params=params)
         return pandas.read_sql_query(sql, con=self.conn, index_col='inserted_at',\
                                      parse_dates=('inserted_at'), params=params)
+#
+# delete the rate-logs before the specified datetime.
+#
+    def delete_ratelogs(self, last_datetime):
+        #print(last_datetime)
+        last_time_epoch = int(time.mktime(last_datetime.timetuple()))
+        sql = "delete from ratelogs where "\
+            + f"time_epoch < {last_time_epoch}"
+        print(sql)
+        self.cur.execute(sql)
+        self.conn.commit()
+        return
 #eof

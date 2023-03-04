@@ -35,7 +35,7 @@ print('<< chart start >>')
 print(cmdline)
 #
 macd_flg = False        # not display MACD
-last = (24*7*4)         # 24h*week-days*week(default is 4-week)
+last = (24*7*1)         # 24h*week-days*week(default is 1-week)
 # 
 selsyms = [sym for sym in args if sym in coin_symbols]
 selnum = len(selsyms)

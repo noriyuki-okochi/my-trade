@@ -2,6 +2,7 @@
 # my function-library
 #
 from datetime import datetime
+from datetime import timedelta
 import smtplib
 from smtplib import SMTPException
 import ssl
@@ -56,4 +57,30 @@ def colored_reset():
 def time_stamp():
     return datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
+#
+# return the datetime the specified term ago.
+#
+def last_datetime(value, span):
+    print(f"value={value}, span={span}")
+    now_date = datetime.today().date()
+    yy = now_date.year
+    mm = now_date.month
+    dd = now_date.day
+    #print(f"type={type(now_date)}, {now_date}")
+    if span != 'd':
+        if span == 'm':
+            mm = (yy-1)*12 + mm
+            mm -= value
+            #
+            yy = int((mm-1)/12) + 1
+            mm = (mm-1)%12 + 1
+        elif span == 'y':
+            yy -= value
+        days = now_date - datetime(yy, mm, dd).date()
+    else:
+        days = timedelta(days = value)
+    #
+    print(f"{days} ago")
+    d = datetime.now() - days
+    return d
 
