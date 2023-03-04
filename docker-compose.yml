@@ -1,0 +1,11 @@
+version: '3'
+services:
+    python3:
+        restart: always
+        build: .
+        image: 'python3-mytrade'
+        container_name: 'mytrade'
+        working_dir: '/root/mytrade'
+        tty: true
+        volumes:
+            - ${SRC_PATH}:/root/mytrade/src
