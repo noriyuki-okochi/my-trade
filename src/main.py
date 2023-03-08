@@ -62,7 +62,7 @@ print('<< Auto-trade start >>')
 if delval != None:
     last_datetime = last_datetime(delval, delopt) 
     db.delete_ratelogs(last_datetime)
-    print(f"the rate-logs before {last_datetime} have deleted.")
+    print(f"the rate-logs before {last_datetime} have deleted now.")
 
 #
 # 自動取引のトリガー（レート値）登録

@@ -18,7 +18,6 @@ COPY create_table.sql /root/mytrade
 COPY create_orders.sql /root/mytrade
 COPY alter_table.sql /root/mytrade
 COPY Auto-trade.db /root/mytrade
-COPY api-key.txt /root/mytrade
 COPY .setenv /root/mytrade
 COPY auto-start.sh /root/mytrade
 WORKDIR /root/mytrade

@@ -3,10 +3,10 @@ import os
 ##############################
 # 共通定数
 ##############################
-ACCESS_KEY_CHECK = '9JwEAisq2xCWssRk'
-SECRET_KEY_CHECK = 'O7gSYjrcO_flbga19uk01ZR4jZ3Iy5u7'
-ACCESS_KEY_GMO = 'OTltuobtT1Xgd91Uxm8O20EN9w/x/6AX'
-SECRET_KEY_GMO = 'F+HWh1itXkwJRxPuprwl0ZTXPQRYVZZDHzSPk8i2Brm9Mp1bovo7FNJXEuFK2rQY'
+ACCESS_KEY_CHECK = '****************'
+SECRET_KEY_CHECK = '*****************************'
+ACCESS_KEY_GMO = '********************************'
+SECRET_KEY_GMO = '**************************************************************'
 DB_PATH = "../Auto-trade.db"
 EXCHANGE_CHECK = 'coincheck'
 EXCHANGE_GMO = 'gmocoin'
