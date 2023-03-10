@@ -1,4 +1,6 @@
-venv
+venv/
+.vscode/
+*.code-workspace
 Untitled.ipynb
 *.html
 *__.*
