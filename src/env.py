@@ -45,35 +45,54 @@ if coin_sym != None:
 else:
     coin_symbols = ('btc',)
 
+#
+# 自動取引コイン
+#
+auto_coin_symbols = [SYM_BTC, SYM_ETH, SYM_IOST, SYM_OMG]
 # 「売り」アラート送信
-btc_sell_rate = os.getenv('BTC_SELL_RATE')
-eth_sell_rate = os.getenv('ETH_SELL_RATE')
-omg_sell_rate = os.getenv('OMG_SELL_RATE')
-iost_sell_rate = os.getenv('IOST_SELL_RATE')
+sell_rate = { 'btc':os.getenv('BTC_SELL_RATE'),
+              'eth':os.getenv('ETH_SELL_RATE'),
+              'omg':os.getenv('OMG_SELL_RATE'),
+              'iost':os.getenv('IOST_SELL_RATE')}
 
 # 「買い」アラート送信
-btc_buy_rate = os.getenv('BTC_BUY_RATE')
-eth_buy_rate = os.getenv('ETH_BUY_RATE')
-omg_buy_rate = os.getenv('OMG_BUY_RATE')
-iost_buy_rate = os.getenv('IOST_BUY_RATE')
+buy_rate = { 'btc':os.getenv('BTC_BUY_RATE'),
+             'eth':os.getenv('ETH_BUY_RATE'),
+             'omg':os.getenv('OMG_BUY_RATE'),
+             'iost':os.getenv('IOST_BUY_RATE')}
 
-# チャート表示ターゲットレベル
-btc_target_rate = os.getenv('BTC_TARGET_RATE')
-iost_target_rate = os.getenv('IOST_TARGET_RATE')
-eth_target_rate = os.getenv('ETH_TARGET_RATE')
-omg_target_rate = os.getenv('OMG_TARGET_RATE')
+# チャート表示ターゲットレート
+alart_rate = { 'btc':os.getenv('BTC_TARGET_RATE'),
+               'iost':os.getenv('IOST_TARGET_RATE'),
+               'eth':os.getenv('ETH_TARGET_RATE'),
+               'omg':os.getenv('OMG_TARGET_RATE') }
+# チャート表示中央値レート
+base_rate = { 'btc':os.getenv('BTC_BASE_RATE'),
+              'iost':os.getenv('IOST_BASE_RATE'),
+              'eth':os.getenv('ETH_BASE_RATE'),
+              'omg':os.getenv('OMG_BASE_RATE') }
+# チャート表示上下限偏差（％）
+devi_rate = { 'btc':os.getenv('BTC_DEVI_RATE'),
+              'iost':os.getenv('IOST_DEVI_RATE'),
+              'eth':os.getenv('ETH_DEVI_RATE'),
+              'omg':os.getenv('OMG_DEVI_RATE') }
+#
+target_rate = {'btc':[],'iost':[],'eth':[],'omg':[]}
+for sym in coin_symbols:
+    #下限値
+    if base_rate[sym] != None and devi_rate[sym] != None:
+        lower_rate = float(base_rate[sym])*(1.0 - float(devi_rate[sym]))
+        target_rate[sym].append(f"{lower_rate:.3f}")
+    #警報通知レート
+    if target_rate[sym] != None:
+        target_rate[sym] += alart_rate[sym].split()
+    #上限値
+    if base_rate[sym] != None and devi_rate[sym] != None:
+        upper_rate = float(base_rate[sym])*(1.0 + float(devi_rate[sym]))
+        target_rate[sym].append(f"{upper_rate:.3f}")
+    print(f"{sym}:{target_rate[sym]}")
 
-target_rate = {}
-if btc_target_rate != None:
-    target_rate['btc'] = btc_target_rate.split()
-if iost_target_rate != None:
-    target_rate['iost'] = iost_target_rate.split()
-if eth_target_rate != None:
-    target_rate['eth'] = eth_target_rate.split()
-if omg_target_rate != None:
-    target_rate['omg'] = omg_target_rate.split()
-#print(target_rate)
-# チャート表示ターゲットレベル
+# 警告（ブリンク）表示閾値（変動率）
 blink_rate = os.getenv('BLINK_RATE')
 if blink_rate == None:
     blink_rate = 1.0

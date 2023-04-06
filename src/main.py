@@ -66,34 +66,13 @@ if delval != None:
 
 #
 # 自動取引のトリガー（レート値）登録
-# BTC
-if btc_sell_rate != None:
-    print(f"btc_sell_rate :{btc_sell_rate}")
-    db.insert_trigger(SYM_BTC, TRADE_SELL, btc_sell_rate.split())
-if btc_buy_rate != None:
-    print(f"btc_buy_rate  :{btc_buy_rate}")
-    db.insert_trigger(SYM_BTC, TRADE_BUY, btc_buy_rate.split())
-# ETH
-if eth_sell_rate != None:
-    print(f"eth_sell_rate :{eth_sell_rate}")
-    db.insert_trigger(SYM_ETH, TRADE_SELL, eth_sell_rate.split())
-if eth_buy_rate != None:
-    print(f"eth_buy_rate  :{eth_buy_rate}")
-    db.insert_trigger(SYM_ETH, TRADE_BUY, eth_buy_rate.split())
-# OMG
-if omg_sell_rate != None:
-    print(f"omg_sell_rate :{omg_sell_rate}")
-    db.insert_trigger(SYM_OMG, TRADE_SELL, omg_sell_rate.split())
-if omg_buy_rate != None:
-    print(f"omg_buy_rate  :{omg_buy_rate}")
-    db.insert_trigger(SYM_OMG, TRADE_BUY, omg_buy_rate.split())
-# IOST
-if iost_sell_rate != None:
-    print(f"iost_sell_rate:{iost_sell_rate}")
-    db.insert_trigger(SYM_IOST, TRADE_SELL, iost_sell_rate.split())
-if iost_buy_rate != None:
-    print(f"iost_buy_rate :{iost_buy_rate}")
-    db.insert_trigger(SYM_IOST, TRADE_BUY, iost_buy_rate.split())
+for sym in auto_coin_symbols:
+    if sell_rate[sym] != None:
+        print(f"{sym}_sell_rate :{sell_rate[sym]}")
+        db.insert_trigger(sym, TRADE_SELL, sell_rate[sym].split())
+    if buy_rate[sym] != None:
+        print(f"{sym}_buy_rate  :{buy_rate[sym]}")
+        db.insert_trigger(sym, TRADE_BUY, buy_rate[sym].split())
 #
 # create instance for CoinCheck private-API
 #
