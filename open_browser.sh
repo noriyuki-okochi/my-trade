@@ -1,4 +1,5 @@
 #! /bin/bash
+echo ${1}
 #convert WSL-path to Win-path 
 file=`echo ${1}| sed -e "s/^file:\/\///"`
 #echo $(wslpath -w ${file})

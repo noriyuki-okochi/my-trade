@@ -20,6 +20,7 @@ COPY alter_table.sql /root/mytrade
 COPY Auto-trade.db /root/mytrade
 COPY .setenv /root/mytrade
 COPY auto-start.sh /root/mytrade
+COPY chart-start.sh /root/mytrade
 WORKDIR /root/mytrade
 RUN pip install --upgrade pip
 RUN pip install --upgrade setuptools

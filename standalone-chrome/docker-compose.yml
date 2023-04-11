@@ -1,0 +1,14 @@
+services:
+  chrome:
+    build: .
+    restart: unless-stopped
+    ports:
+      - 4444:4444
+      - 15900:5900
+    volumes:
+      - /dev/shm:/dev/shm
+      - /etc/localtime:/etc/localtime:ro
+      - ${SRC_PATH}:/home/seluser/mytrade/src
+    environment:
+      - SCREEN_WIDTH=1600
+      - SCREEN_HEIGHT=900

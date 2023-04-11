@@ -1,11 +1,28 @@
 version: '3'
 services:
-    python3:
-        restart: always
-        build: .
-        image: 'python3-mytrade'
-        container_name: 'mytrade'
-        working_dir: '/root/mytrade'
-        tty: true
-        volumes:
-            - ${SRC_PATH}:/root/mytrade/src
+  chrome:
+    build: ./standalone-chrome
+    image: 'standalone-chrome'
+    container_name: 'selenium-chrome'
+    restart: unless-stopped
+    ports:
+      - 4444:4444
+      - 15900:5900
+    volumes:
+      - /dev/shm:/dev/shm
+      - /etc/localtime:/etc/localtime:ro
+      - ${SRC_PATH}:/home/seluser/mytrade/src
+    environment:
+      - SCREEN_WIDTH=1600
+      - SCREEN_HEIGHT=900
+      - DISPLAY=172.24.0.1:0.0
+  python3:
+    restart: always
+    build: .
+    image: 'python3-mytrade'
+    container_name: 'mytrade'
+    working_dir: '/root/mytrade'
+    tty: true
+    volumes:
+      - ${SRC_PATH}:/root/mytrade/src
+  
