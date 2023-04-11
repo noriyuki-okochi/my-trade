@@ -324,11 +324,11 @@ else:
         fig.update_traces(dict(showlegend = False), row=2, col=1)
 #
 # open the figure in  web-browser
-#fig.write_html('candle_figure.html', auto_open=True)
-fig.write_html('candle_figure.html', auto_open=False)
+fig.write_html('candle_figure.html', auto_open=True)
+#fig.write_html('candle_figure.html', auto_open=False)
 #
 #
-
+'''
 from selenium import webdriver
 import time
 
@@ -339,7 +339,8 @@ options.add_argument("--start-maximized")
 # Selenium Serverに接続
 driver = webdriver.Remote(command_executor='http://chrome:4444/wd/hub',
 options=options)
-
+'''
+'''
 try:
   # 要素の待機時間を最大3秒に設定
   driver.implicitly_wait(3)
@@ -349,7 +350,8 @@ try:
   file_path ='/home/seluser/mytrade/src/candle_figure.html'
   print(file_path) 
   driver.get(f"file://{file_path}")
-  '''
+'''
+'''
   # 検索ボックスに「Ubuntu」を入力
   element_search_form = driver.find_element_by_id('searchFormKeyword')
   element_search_form.send_keys('Ubuntu')
@@ -365,7 +367,8 @@ try:
     if not element_title.text.strip():
       continue
     print(element_title.text.strip())
-  '''
+'''
+'''
 except:
   import traceback
   traceback.print_exc()
@@ -374,4 +377,5 @@ finally:
   # Chromeを終了
   input("何かキーを押すと終了します...")
   driver.quit()
+'''
 #eof
