@@ -83,4 +83,12 @@ def last_datetime(value, span):
     print(f"{days} ago")
     d = datetime.now() - days
     return d
-
+#
+#
+#
+def is_float(str):
+    try:
+        float(str)
+        return True
+    except ValueError:
+        return False

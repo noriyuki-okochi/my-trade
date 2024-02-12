@@ -15,6 +15,7 @@ services:
     environment:
       - SCREEN_WIDTH=1600
       - SCREEN_HEIGHT=900
+#      - DISPLAY=:99
       - DISPLAY=172.24.0.1:0.0
   python3:
     restart: always

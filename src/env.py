@@ -12,7 +12,7 @@ EXCHANGE_CHECK = 'coincheck'
 EXCHANGE_GMO = 'gmocoin'
 SYM_BTC = 'btc'
 SYM_ETH = 'eth'
-SYM_OMG = 'omg'
+SYM_MATIC = 'matic'
 SYM_IOST = 'iost'
 TRADE_SELL = 'sell'
 TRADE_BUY = 'buy'
@@ -48,49 +48,54 @@ else:
 #
 # 自動取引コイン
 #
-auto_coin_symbols = [SYM_BTC, SYM_ETH, SYM_IOST, SYM_OMG]
+auto_coins = os.getenv('AUTO_COIN_SYMBOLS')
+if auto_coins != None:
+    auto_coin_symbols = auto_coins.split()
+else:
+    auto_coin_symbols = [SYM_BTC]
+
 # 「売り」アラート送信
 sell_rate = { 'btc':os.getenv('BTC_SELL_RATE'),
               'eth':os.getenv('ETH_SELL_RATE'),
-              'omg':os.getenv('OMG_SELL_RATE'),
+              'matic':os.getenv('MATIC_SELL_RATE'),
               'iost':os.getenv('IOST_SELL_RATE')}
 
 # 「買い」アラート送信
 buy_rate = { 'btc':os.getenv('BTC_BUY_RATE'),
              'eth':os.getenv('ETH_BUY_RATE'),
-             'omg':os.getenv('OMG_BUY_RATE'),
+             'matic':os.getenv('MATIC_BUY_RATE'),
              'iost':os.getenv('IOST_BUY_RATE')}
 
 # チャート表示ターゲットレート
 alart_rate = { 'btc':os.getenv('BTC_TARGET_RATE'),
                'iost':os.getenv('IOST_TARGET_RATE'),
                'eth':os.getenv('ETH_TARGET_RATE'),
-               'omg':os.getenv('OMG_TARGET_RATE') }
-# チャート表示中央値レート
+               'matic':os.getenv('MATIC_TARGET_RATE') }
+# スプレッド中央値（購入）レート
 base_rate = { 'btc':os.getenv('BTC_BASE_RATE'),
               'iost':os.getenv('IOST_BASE_RATE'),
               'eth':os.getenv('ETH_BASE_RATE'),
-              'omg':os.getenv('OMG_BASE_RATE') }
-# チャート表示上下限偏差（％）
-devi_rate = { 'btc':os.getenv('BTC_DEVI_RATE'),
-              'iost':os.getenv('IOST_DEVI_RATE'),
-              'eth':os.getenv('ETH_DEVI_RATE'),
-              'omg':os.getenv('OMG_DEVI_RATE') }
+              'matic':os.getenv('MATIC_BASE_RATE') }
+# スプレッド（％）
+sp_rate = { 'btc':os.getenv('BTC_SP_RATE'),
+              'iost':os.getenv('IOST_SP_RATE'),
+              'eth':os.getenv('ETH_SP_RATE'),
+              'matic':os.getenv('MATIC_SP_RATE') }
 #
-target_rate = {'btc':[],'iost':[],'eth':[],'omg':[]}
+target_rate = {'btc':[],'iost':[],'eth':[],'matic':[]}
 for sym in coin_symbols:
     #下限値
-    if base_rate[sym] != None and devi_rate[sym] != None:
-        lower_rate = float(base_rate[sym])*(1.0 - float(devi_rate[sym]))
-        target_rate[sym].append(f"{lower_rate:.3f}")
+    if base_rate[sym] != None and sp_rate[sym] != None:
+        lower_rate = float(base_rate[sym])*(1.0 - float(sp_rate[sym]))
+        target_rate[sym].append(f"{lower_rate:.3f}:buy")
     #警報通知レート
     if target_rate[sym] != None:
         target_rate[sym] += alart_rate[sym].split()
     #上限値
-    if base_rate[sym] != None and devi_rate[sym] != None:
-        upper_rate = float(base_rate[sym])*(1.0 + float(devi_rate[sym]))
-        target_rate[sym].append(f"{upper_rate:.3f}")
-    print(f"{sym}:{target_rate[sym]}")
+    if base_rate[sym] != None and sp_rate[sym] != None:
+        upper_rate = float(base_rate[sym])*(1.0 + float(sp_rate[sym]))
+        target_rate[sym].append(f"{upper_rate:.3f}:sell")
+    #print(f"{sym}:{target_rate[sym]}")
 
 # 警告（ブリンク）表示閾値（変動率）
 blink_rate = os.getenv('BLINK_RATE')
@@ -100,12 +105,18 @@ else:
     blink_rate = float(blink_rate)
 #print(blink_rate)
 
+hist_continuing = os.getenv('HIST_CONTINUING')
+if hist_continuing == None:
+    hist_continuing = 4
+else:
+    hist_continuing = int(hist_continuing)
+
 # 注文ID
 #order_id = None
 # 購入金額
-order_amount_jpy = os.getenv('ORDER_AMOUNT_JPY')
+order_amount_jpy: int = os.getenv('ORDER_AMOUNT_JPY')
 if order_amount_jpy == None:
-    order_amount_jpy = 100000
+    order_amount_jpy = 2000
 else:
     order_amount_jpy = int(order_amount_jpy)
 

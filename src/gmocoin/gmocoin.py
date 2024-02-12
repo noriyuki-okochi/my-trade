@@ -12,10 +12,11 @@ import time
 from datetime import datetime
 import hmac
 import hashlib
+import urllib.error
 import urllib.request as http
 import urllib.parse as parser
+import requests
 #print(http.__file__)
-#import requests
 #
 #
 # Exception Class for API
@@ -31,16 +32,15 @@ class GmoCoin:
         self.secret_key = secret_key
         self.url = url
 
+    # (urllib版)GET
     def get(self, path, params=None):
         uri = self.url + path
-        strJson = ''
         if params != None:
             uri = f'{uri}?{parser.urlencode(params)}'
 
         nonce = '{0}000'.format(int(time.mktime(datetime.now().timetuple())))
         message = nonce + 'GET' + path
         signature = self.getSignature(message)
-
         headers = self.getHeader(self.access_key, nonce, signature)
         req = http.Request(uri, headers=headers, method='GET')
         try:
@@ -60,14 +60,16 @@ class GmoCoin:
             res.close()
         return result 
 
+    # (urllib版)POST
     def post(self, path, params=None):
         uri = self.url + path
+        data = parser.urlencode(params).encode()
         params = json.dumps(params)
         nonce = '{0}000'.format(int(time.mktime(datetime.now().timetuple())))
         message = nonce + 'POST' + path + params
         signature = self.getSignature(message)
         headers = self.getHeader(self.access_key, nonce, signature)
-        req = http.Request(uri, params, headers=headers, method='POST')
+        req = http.Request(uri, data, headers=headers, method='POST')
         try:
             res = http.urlopen(req)
             if res.status == 200:
@@ -76,19 +78,40 @@ class GmoCoin:
             else:
                 print(res.msg+' :',res.status)
                 raise CoinApiError(f'https status={res.status}')
-        except:
-            print('exception!!')
-            raise CoinApiError(f'exception')
+        except urllib.error.HTTPError as err:
+            print('post:HTTP exception!!')
+            print(err.code)
+            raise CoinApiError(f'HTTPError')
+        except urllib.error.URLError as err:
+            print('post:URL exception!!')
+            print(err.reason)
+            raise CoinApiError(f'URLError')
         finally:
             res.close()
         return result 
-        '''
-        return requests.get(
-            uri,
-            data = params,
-            headers = self.getHeader(self.access_key, nonce, signature)
-        ).json()
-        '''
+    
+    # (requests版)POST
+    def requestPost(self, path, params=None):
+        uri = self.url + path
+        params = json.dumps(params)
+        nonce = '{0}000'.format(int(time.mktime(datetime.now().timetuple())))
+        message = nonce + 'POST' + path + params
+        signature = self.getSignature(message)
+        headers = self.getHeader(self.access_key, nonce, signature)
+        try:
+            res = requests.post(uri, headers=headers, data=params, timeout=5)
+            if res.status_code == 200:
+                res = res.json()
+            else:
+                res = None
+        except requests.exceptions.Timeout as e:
+            print("Timeout:", e)
+            res = None
+        except requests.exceptions.RequestException as e:
+            print("RequestException:", e)
+            res = None
+        return res
+    
 
     def getSignature(self, message):
         signature = hmac.new(
@@ -116,23 +139,26 @@ class GmoCoin:
             return None
         order = order.upper()
         price = f"{int(rate)}"
-        symbol = symbol.upper() + "_JPY"
+        #symbol = symbol.upper() + "_JPY"   # 信用取引
+        symbol = symbol.upper()             # 現物取引
         reqbody = {
             "symbol": symbol,
             "side": order,
             "executionType":type,
-            "price":price,
+            #"price":price,                 # type='LIMIT'時のみ必要、'MARKET'では5103のエラー発生
             "size":size
         }
         print(reqbody)
         try:
-            result = self.post(path, reqbody)
-            #result = {"status":0, "data":12346}
+            result = self.requestPost(path, reqbody)
+            #result = self.post(path, reqbody)
             if result['status'] == 0:
                 return result['data']
             else:
+                print(result)
                 return None
         except:
+            print('execOrder:exception!!')
             return None
 
     def cancelOrders(self, ids, path='/v1/cancelOrders'):
@@ -140,5 +166,5 @@ class GmoCoin:
             "orderIds": ids
         }
         return self.post(path, reqbody)
-
+#
 #eof

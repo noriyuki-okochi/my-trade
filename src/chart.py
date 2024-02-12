@@ -92,10 +92,11 @@ for sym in coin_symbols:
         else:
             irow = icount
             icol = 1
-        print(f"symbol:{sym}")
+        #print(f"symbol:{sym}")
+        print(f"{sym}:{target_rate[sym]}")
         params = {"sym":sym,"limit":limit}
         #
-        # read rate-date from db to pandas
+        # read rate-data from db to pandas
         df = db.pandas_read_ratelogs(params)
         #print(df.index)
         #print(df.count())
@@ -234,15 +235,17 @@ for sym in coin_symbols:
                     if rate.find(':') != -1:
                         col_target = rate[rate.find(':')+1:]
                         rate = rate[:rate.find(':')]
+                        lcolor = 'cyan'
                     else:    
                         col_target = f"target{i}"
+                        lcolor = 'blue'
                         i += 1
                     mdfil[col_target] = rate
                     fig = fig.add_trace( go.Scatter(x=mdfil.index, 
                                     name=col_target,
                                     y=mdfil[col_target], 
                                     #line_color= 'purple',
-                                    line_color= 'cyan',
+                                    line_color= lcolor,
                                     line=dict(width = 1),
                                     mode="lines"),
                             row = irow, 
