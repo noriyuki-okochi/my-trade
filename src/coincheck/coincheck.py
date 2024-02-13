@@ -13,6 +13,7 @@ import hmac
 import hashlib
 import urllib.request as http
 import urllib.parse as parser
+import requests
 #print(http.__file__)
 #import requests
 #
@@ -107,5 +108,68 @@ class Coincheck:
             'Content-Type': 'application/json'
         }
         return headers
+        
+    # (requests版)POST
+    def requestPost(self, path, params=None):
+        uri = self.url + path
+        params = json.dumps(params)
+        nonce = str(int(time.time()))
+        message = nonce + uri + params
+        signature = self.getSignature(message)
+        headers = self.getHeader(self.access_key, nonce, signature)
+        try:
+            res = requests.post(uri, headers=headers, data=params, timeout=5)
+            if res.status_code == 200:
+                res = res.json()
+            else:
+                res = None
+        except requests.exceptions.Timeout as e:
+            print("Timeout:", e)
+            res = None
+        except requests.exceptions.RequestException as e:
+            print("RequestException:", e)
+            res = None
+        return res
+
+    def execOrder(self, symbol, order, type, rate, amount, path='/api/exchange/orders'):
+        if order.lower() == 'buy' and type.lower() == 'market':
+            # 金額に変換
+            amount = int(amount*rate)
+            size = f"{amount}"
+        else:
+            if symbol.lower() == 'btc':
+                size = f"{amount:.4f}"
+            elif symbol.lower() == 'eth':
+                size = f"{amount:.2f}"
+            else:
+                return None
+        #
+        symbol = symbol.lower() + "_jpy"
+        if type.lower() == "market":
+            order = "market_" + order.lower
+        if order == "market_buy":
+            reqbody = {
+                "pair": symbol,
+                "order_type": order,
+                "market_buy_amount":size
+            }
+        else:
+            reqbody = {
+                "pair": symbol,
+                "order_type": order,
+                "amount":size
+            }
+        #
+        print(reqbody)
+        try:
+            result = self.requestPost(path, reqbody)
+            if result['status'] == 0:
+                return result['data']
+            else:
+                print(result)
+                return None
+        except:
+            print('execOrder:exception!!')
+            return None
 
 # eof
