@@ -338,9 +338,10 @@ if result['status'] == 0:
         lists = data['list']
         order = { 'id': 0, 'size': 0.0, 'price': 0, 'count': 0}
         count = 0
+        #print(f"\n")
         for list in lists:
             count += 1
-            print(f"\n>latest({count}):{list['orderId']} {list['symbol']} {list['side']}")
+            print(f">latest({count}):{list['orderId']} {list['symbol']:4} {list['side']:4} {list['price']:>9}({list['size']})")
             if order['id'] == list['orderId']:
                 order['size'] += float(list['size'])
                 order['price'] += int(int(list['price'])*float(list['size']))
@@ -348,13 +349,14 @@ if result['status'] == 0:
             else:
                 if order['id'] != 0:
                     # 同じ注文IDの約定レートの加重平均で更新する
-                    rate = order['price']/(order['size']*order['count'])
+                    rate = order['price']/(order['size'])
                     db.update_orderRate(order['id'], rate)
                 #
                 order['id'] = list['orderId'] 
                 order['size'] = float(list['size']) 
                 order['price'] = int(int(list['price'])*float(list['size']))
                 order['count'] = 1 
+        # 
         if order['id'] != 0:
             # 同じ注文IDの約定レートの加重平均で更新する
             rate = order['price']/(order['size']*order['count'])

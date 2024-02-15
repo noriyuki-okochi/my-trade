@@ -278,7 +278,10 @@ class MyDb:
                         elif 'SIG1.5' in method:
                             t_rate -= signe['std']*0.5      # +1.5σ
                         if b_rate != 0.0 and b_rate > t_rate:
-                            t_rate = b_rate                 # 指定
+                            t_rate = b_rate
+                    elif b_rate == 0.0:                     
+                        order = self.get_lastOrder(self.to_exchange, symbol, 'buy')
+                        t_rate = b_rate = order['rate']     # 直近の買いレート
                     #
                     if c_rate >= t_rate:
                         if count == 0  and t_rate > l_rate:
@@ -373,6 +376,9 @@ class MyDb:
                             t_rate += signe['std']*0.5
                         if b_rate != 0.0 and b_rate < t_rate:
                             t_rate = b_rate
+                    elif b_rate == 0.0:                     
+                        order = self.get_lastOrder(self.to_exchange, symbol, 'sell')
+                        t_rate = b_rate = order['rate']     # 直近の売りレート
                    #
                     if c_rate <= t_rate:
                         if count == 0  and t_rate < l_rate:
