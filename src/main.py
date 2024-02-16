@@ -359,7 +359,7 @@ if result['status'] == 0:
         # 
         if order['id'] != 0:
             # 同じ注文IDの約定レートの加重平均で更新する
-            rate = order['price']/(order['size']*order['count'])
+            rate = order['price']/(order['size'])
             db.update_orderRate(order['id'], rate)
         #
     else:

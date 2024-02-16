@@ -232,6 +232,20 @@ class MyDb:
             self.conn.commit()
             ret = True
         return ret
+#
+#  method :: '(gx|dx)SIG(1.[0-9])
+#
+    def get_targetRate(self, trade, method, towsig, std):
+        t_rate = towsig        # +2σ
+        if len(method) > len('xxSIG') and is_float(method[5:]):
+            sig = 2.0 - float(method[5:])
+            #print(f">get_targetRate:sig={sig:5.3f}")
+            if trade == 'sell':  
+                t_rate = towsig - std*sig        # +1.[0-9]σ
+            else:
+                t_rate = towsig + std*sig        # +1.[0-9]σ
+        #
+        return t_rate
 #     
     def check_sell_tradeRate(self, symbol, c_rate, l_rate):
         self.to_exchange = None
@@ -272,11 +286,7 @@ class MyDb:
                     signe = self.get_macd_signe(symbol)
                     if 'SIG' in method:
                         # 目標レートの設定
-                        t_rate = signe['upper']             # +2σ
-                        if 'SIG1.0' in method:
-                            t_rate -= signe['std']          # +σ
-                        elif 'SIG1.5' in method:
-                            t_rate -= signe['std']*0.5      # +1.5σ
+                        t_rate = self.get_targetRate('sell', method, signe['upper'], signe['std'])
                         if b_rate != 0.0 and b_rate > t_rate:
                             t_rate = b_rate
                     elif b_rate == 0.0:                     
@@ -369,11 +379,7 @@ class MyDb:
                     signe = self.get_macd_signe(symbol)
                     if 'SIG' in method:
                         # 目標レートの設定
-                        t_rate = signe['lower']
-                        if 'SIG1.0' in method:
-                            t_rate += signe['std']
-                        elif 'SIG1.5' in method:
-                            t_rate += signe['std']*0.5
+                        t_rate = self.get_targetRate('buy', method, signe['lower'], signe['std'])
                         if b_rate != 0.0 and b_rate < t_rate:
                             t_rate = b_rate
                     elif b_rate == 0.0:                     
