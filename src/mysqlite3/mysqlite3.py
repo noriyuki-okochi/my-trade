@@ -246,7 +246,11 @@ class MyDb:
                 t_rate = towsig + std*sig        # +1.[0-9]σ
         #
         return t_rate
-#     
+#
+# 自動取引（売り）のトリガーチェック
+#       c_rate: 現在のレート
+#       l_rate: 前回のレート
+#      
     def check_sell_tradeRate(self, symbol, c_rate, l_rate):
         self.to_exchange = None
         self.exec_amount = None
@@ -264,24 +268,24 @@ class MyDb:
         while rs != None:
             if rs['exchange'] != '*' :
                 seqnum = rs['seqnum']
-                b_rate = t_rate = rs['rate']
+                b_rate = t_rate = rs['rate']            # 取引基準レート
                 countA = count = rs['count']
                 hist = rs['histgram']
                 cont = rs['continuing']
-                method = rs['method'].upper()
+                method = rs['method'].upper()           # 自動取引シナリオ
                 #print(f"sell:{t_rate}:{method}:{l_rate} -> {c_rate}")
 
-                self.to_exchange = rs['exchange']
-                self.exec_amount = rs['amount']
-                self.exec_type = rs['exectype']
+                self.to_exchange = rs['exchange']       # 取引所
+                self.exec_amount = rs['amount']         # 取引数量
+                self.exec_type = rs['exectype']         # 現物取引：'MARKET'
                 #
-                if 'IM' in method:
+                if 'IM' in method:              # 指値
                     if c_rate >= t_rate and t_rate > l_rate:
                         # 目標レートを超えた
                         countA = 2
                         ret = True
                         break
-                elif 'DX' in method:
+                elif 'DX' in method:            # MACD デッドクロス
                     # 統計値の取得
                     signe = self.get_macd_signe(symbol)
                     if 'SIG' in method:
@@ -326,11 +330,11 @@ class MyDb:
             rs = self.cur.fetchone()
         #
         if countA != count or ( ('DX' in method) and count == 1 ):
-            print_text = f"   >sell({symbol}):{ret}:{count}->{countA}:seq={seqnum}:"\
-                       + f"{method}({b_rate:,.3f}):t_rate={t_rate:13,.3f}:"
-            print(print_text + self.edit_cont_text(cont) + colored_reset())
-
-            # update the control parmeter-count 
+            # update the control parmeter-count, histgram, continuing in trigger-table
+            if countA != count or cont != 0:
+                self.print_state_change(ret, count, countA, cont, \
+                            seqnum, symbol, 'sell', method, b_rate, t_rate)
+            #
             timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             sql = f"update trigger set count={countA},"\
                 + f"histgram={hist},continuing={cont},updated_at='{timestamp}'"\
@@ -339,7 +343,9 @@ class MyDb:
             self.conn.commit()
         #
         return ret
-#     
+#
+# 自動取引（買い）のトリガーチェック
+#         
     def check_buy_tradeRate(self, symbol, c_rate, l_rate):
         self.to_exchange = None
         self.exec_amount = None
@@ -368,13 +374,13 @@ class MyDb:
                 self.exec_amount = rs['amount']
                 self.exec_type = rs['exectype']
                 #
-                if 'IM' in method:
+                if 'IM' in method:          # 指値
                     if c_rate <= t_rate and t_rate < l_rate:
                         # 目標レートを下回った
                         countA = 2
                         ret = True
                         break
-                elif 'GX' in method:
+                elif 'GX' in method:        # MACD ゴールデンクロス
                     # 統計値の取得
                     signe = self.get_macd_signe(symbol)
                     if 'SIG' in method:
@@ -420,11 +426,11 @@ class MyDb:
             rs = self.cur.fetchone()
         #
         if countA != count or ( ('GX' in method) and count == 1 ):
-            print_text = f"   >buy({symbol}):{ret}:{count}->{countA}:seq={seqnum}:"\
-                       + f"{method}({b_rate:,.3f}):t_rate={t_rate:13,.3f}:"
-            print(print_text + self.edit_cont_text(cont) + colored_reset())
-
             # update the control parmeter-count 
+            if countA != count or cont != 0:
+                self.print_state_change(ret, count, countA, cont, \
+                            seqnum, symbol, 'buy', method, b_rate, t_rate)
+            #
             timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             sql = f"update trigger set count={countA},"\
                 + f"histgram={hist},continuing={cont},updated_at='{timestamp}'"\
@@ -433,6 +439,8 @@ class MyDb:
             self.conn.commit()
         #
         return ret
+#
+#
 #
     def pandas_read_ratelogs(self, params):
         if params['sym'] == '*':
@@ -524,4 +532,18 @@ class MyDb:
         else:
             cont_text = colored_16(STYLE_NON,FG_GREEN,BG_BLACK,f"  cont={cont}")
         return cont_text
+    #
+#
+# print the state(count)-change of trade trigger.
+#
+    def print_state_change(self, rslt, b_count, a_count, cont, seq, sym, trade, method, b_rate, t_rate):
+        print_text =''
+        if a_count == 1:
+            print_text = colored_16(STYLE_NON,FG_GREEN,BG_BLACK,f"")
+        #
+        print_text += f"   >{trade}({sym}):{rslt}:{b_count}->{a_count}:"\
+                    + f"seq={seq}:{method}({b_rate:,.3f}):t_rate={t_rate:13,.3f}:"
+        print(print_text + self.edit_cont_text(cont) + colored_reset())
+        return
+
 #eof

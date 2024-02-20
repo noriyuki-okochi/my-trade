@@ -166,7 +166,7 @@ elif len(opts) > 1 and opts[1] == '-h':
     print(f"-d([0-9]+)[y|m|d]")
     exit()
 #
-# 現物取引の注文（成行）取し
+# 現物取引の注文（成行）取り消し
 #    -c  (gmo|coin) <id>
 #       <id>:: order-id
 #

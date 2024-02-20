@@ -1,15 +1,18 @@
-SLEEP_DAYS=7
-BLINK_RATE=5.0
-DEL_SPAN_VALUE=1
-DEL_SPAN_OPT="y"
-
-#ヒストグラム連続増減カウント
-HIST_CONTINUING=5
+SLEEP_DAYS=7                # レートサンプリング継続（プログラムの生存）日数
+BLINK_RATE=5.0              # レートブリンク表示閾値（変動率%）
+DEL_SPAN_VALUE=1            # レートログの保存期間
+DEL_SPAN_OPT="y"            # レートログの保存期間単位('y'|'m'|'d')
 
 #売買自動取引コイン
-AUTO_COIN_SYMBOLS="btc eth"
+AUTO_COIN_SYMBOLS="btc eth iost"
+#買自動取引時のデフォルト取引量（円）
 ORDER_AMOUNT_JPY=15000
+#
 ORDER_AMOUNT=50000
+#
+# DX/GX判定時のヒストグラム連続増減カウント
+#
+HIST_CONTINUING=5
 #
 # 売買自動取引トリガー
 #
@@ -40,7 +43,7 @@ ORDER_AMOUNT=50000
 #       6450000.0
 #   
 BTC_BUY_RATE="0.0!gxSig:gmocoin:0.002 7650000.0!gxSig1.75:gmocoin:0.001 7650000.0!gx:gmocoin:0.002 7650000.0!im:gmocoin:0.002"
-BTC_SELL_RATE="0.0!dxSig:gmocoin:0.0 0.0!dxSig1.5:gmocoin:0.0 8200000.0!im:gmocoin:0.0 0.0!dx:gmocoin:0.0"
+BTC_SELL_RATE="8000000.0!im:gmocoin:0.00 0.0!dxSig:gmocoin:0.002 0.0!dxSig1.5:gmocoin:0.001  0.0!dx:gmocoin:0.001"
 
 ETH_BUY_RATE=""
 ETH_SELL_RATE=""
@@ -49,7 +52,7 @@ MATIC_BUY_RATE="104.0"
 MATIC_SELL_RATE="122.5"
 
 IOST_BUY_RATE="1.20"
-IOST_SELL_RATE="1.41"
+IOST_SELL_RATE="1.43"
 
 #チャート表示
 COIN_SYMBOLS="btc eth iost matic"
@@ -98,5 +101,7 @@ export BTC_SP_RATE
 export ETH_SP_RATE
 export MATIC_SP_RATE
 export IOST_SP_RATE
-
+#
+# チャート表示用のブラウザを指定
+#
 export BROWSER="${HOME}/Auto-trade/mytrade/open_browser.sh"
