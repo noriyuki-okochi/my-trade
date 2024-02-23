@@ -180,12 +180,56 @@ if len(opts) == 4 and opts[1] == '-c':
             obj = gmocoin
         #
         if id.isdigit():
-            ret = obj.cancelOrders(id)
-            print(f">ret={ret}")
+            print(f">Are you sure?[y/n].")
+            ans = input('>')
+            if ans == 'y':
+                ret = obj.cancelOrders(id)
+                print(f">ret={ret}")
         else:
             print(f">illegal argument[{id}]!!:  -c (gmo|coin) <id>")
     else:
         print(f">illegal argument[{exchange}]!!:  -c (gmo|coin) <id>")
+    #
+    exit()
+#
+# テーブルの更新
+#    -u  (trigger|orders) <key-val> <item> [<value>]
+#       <key-val>   :: key-value(seqnum|id)
+#       <item>      :: column-name
+#
+if len(opts) >= 5 and opts[1] == '-u':
+    value = None
+    table = opts[2]
+    keyVal = opts[3]
+    item = opts[4]
+    if len(opts) == 6:
+        value = opts[5]
+    if table in ['trigger','orders', 't', 'o']:
+        if table == 't':
+            table = 'trigger'
+        elif table == 'o':
+            table = 'orders'
+        #
+        item_ok = True
+        if table == 'orders' and (not item in ['rate', 'amount']):
+            item_ok = False
+        if table == 'trigger' and (not item in ['rate', 'method', 'amount', 'count']):
+            item_ok = False
+        #
+        if keyVal.isdigit():
+            if item_ok:
+                if value == None:
+                    print(f">Please input new-value.![/:cancle]")
+                    value = input('>')
+                if value != '/':
+                    ret = db.update_any(table, keyVal, item, value)
+                    print(f">ret={ret}")
+            else:
+                print(f">'{item}' can not specified.!!")
+        else:
+            print(f">illegal key-val[{keyVal}]!!")
+    else:
+        print(f">illegal table-name[{table}]!!")
     #
     exit()
 #

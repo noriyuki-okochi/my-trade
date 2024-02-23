@@ -137,6 +137,24 @@ class MyDb:
         self.cur.execute(sql)
         self.conn.commit()
 #
+# update the trigger/orders-table
+#
+    def update_any(self, table, keyVal, item, value):
+        #
+        if table == 'trigger':
+            prmKey = 'seqnum'
+        else:       # 'orders'
+            prmKey = 'id'
+        #
+        sql = f"update {table} set {item}={value} where {prmKey}={keyVal}"
+        print(f"update_any:{sql}")
+        ret = None
+        if value != '-':
+            ret = self.cur.execute(sql)
+            self.conn.commit()
+        #
+        return ret
+#
 # insert trigger info. for auto-trade
 #  
     def insert_trigger(self, symbol, trade, ratelist):
