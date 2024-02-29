@@ -129,6 +129,51 @@ class MyDb:
             result = {'rate': rs['rate'], 'amount':rs['amount']}
         return result
 #
+# 指定期間の利益を集計する
+#
+    def get_benefit(self, exchange, pair, fdate, tdate):
+        benefit = None
+        pair = pair.upper() 
+        # BUY
+        sql = "select sum(rate*amount) as JPY, sum(amount) as AMT, avg(rate) as RATE,"\
+              " count(*) as CNT from orders where order_side = 'BUY'"\
+             f" and exchange = '{exchange}' and pair = '{pair}'"
+        if fdate != '' and tdate != '':
+            period = f" and (created_at > '{fdate}' and created_at < '{tdate}')"
+        elif tdate == '':
+            period = f" and (created_at >= '{fdate}')"
+        elif fdate == '':
+            period = f" and (created_at < '{tdate}')"
+        sql += period
+        self.cur.execute(sql)
+        rs = self.cur.execute(sql).fetchone()
+        if rs != None:
+            jpy = rs['JPY']
+            benefit = int(jpy)
+            amt = rs['AMT']
+            rate = rs['RATE']
+            count = rs['CNT']
+            print(f">Buy ={benefit:,}({amt:.3f} x {rate:.3f}) <{count}>")
+            # SELL
+            sql = "select sum(rate*amount) as JPY, sum(amount) as AMT, avg(rate) as RATE,"\
+                  " count(*) as CNT from orders where order_side = 'SELL'"\
+                 f" and exchange = '{exchange}' and pair = '{pair}'"
+            sql += period
+            self.cur.execute(sql)
+            rs = self.cur.execute(sql).fetchone()
+            if rs != None:
+                jpy = rs['JPY']
+                jpy = int(jpy)
+                amt = rs['AMT']
+                rate = rs['RATE']
+                count = rs['CNT']
+                print(f">SELL={jpy:,}({amt:.3f} x {rate:.3f}) <{count}>")
+                #
+                print(f">BeneFit={(jpy - benefit):,}({((jpy - benefit)*100/benefit):.2f}%)")
+                # 利益
+                benefit = jpy - benefit
+        return benefit
+#
 # update the order-rate of orders-log
 #
     def update_orderRate(self, order_id,  rate):
@@ -201,7 +246,9 @@ class MyDb:
                 self.cur.execute(sql)
         #
         self.conn.commit()
-
+#
+# 最終ログのレートを取得する
+#
     def select_lastRate(self, exchange, symbol, logsdays=None):
         sql = "select rate, time_epoch from ratelogs where "\
             + f"exchange='{exchange}' and symbol='{symbol}' "\
@@ -218,7 +265,9 @@ class MyDb:
                 + f"and time_epoch < {last_epoch}"
             self.cur.execute(sql)
         return [rs['rate'],rs['time_epoch']]
-#     
+#
+#  トリガー指定のレートを横断したか判定する
+#      
     def check_tradeRate(self, trade, symbol, c_rate, l_rate):
         ret = False
         self.to_exchange = None
@@ -351,7 +400,7 @@ class MyDb:
             # update the control parmeter-count, histgram, continuing in trigger-table
             if countA != count or cont != 0:
                 self.print_state_change(ret, count, countA, cont, \
-                            seqnum, symbol, 'sell', method, b_rate, t_rate)
+                            seqnum, symbol, 'SELL', method, b_rate, t_rate)
             #
             timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             sql = f"update trigger set count={countA},"\
@@ -447,7 +496,7 @@ class MyDb:
             # update the control parmeter-count 
             if countA != count or cont != 0:
                 self.print_state_change(ret, count, countA, cont, \
-                            seqnum, symbol, 'buy', method, b_rate, t_rate)
+                            seqnum, symbol, 'BUY', method, b_rate, t_rate)
             #
             timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             sql = f"update trigger set count={countA},"\
@@ -558,6 +607,8 @@ class MyDb:
         print_text =''
         if a_count == 1:
             print_text = colored_16(STYLE_NON,FG_GREEN,BG_BLACK,f"")
+        if a_count == 2:
+            print_text = colored_16(STYLE_NON,FG_BLUE,BG_BLACK,f"")
         #
         print_text += f"   >{trade}({sym}):{rslt}:{b_count}->{a_count}:"\
                     + f"seq={seq}:{method}({b_rate:,.3f}):t_rate={t_rate:13,.3f}:"

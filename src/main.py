@@ -113,12 +113,23 @@ def exec_trade(exchange, symbol, trade, type, rate, amount=None):
         db.insert_orders(id, exchange, symbol, trade.upper(), type, rate, amount)
     return id
 #
+# コマンド引数のチェック
+#
+opts = [opt for opt in args ]
+#
+if len(opts) > 1 and opts[1] == '-h':
+    print(" -t (gmo|coin) <symbol> (buy|sell) <size> [<rate>]")
+    print(" -c (gmo|coin) <id>")
+    print(" -b (gmo|coin) <symbol> [<from-date>]:[<to-date>]")
+    print(" -u (trigger|orders) <key-val> <item> [<value>]")
+    print(" -d([0-9]+)[y|m|d]")
+    exit()
+#
 # 現物取引の注文（成行）実行
 #    -t (gmo|coin) <symbol> (buy|sell) <size> [<rate>]
 #       <symbol>  :: {bit|eth}
 #       <size>    :: 9.99999
 ##
-opts = [opt for opt in args ]
 if len(opts) >= 6 and opts[1] == '-t':
     exchange = opts[2]
     symbol = opts[3]
@@ -192,6 +203,38 @@ if len(opts) == 4 and opts[1] == '-c':
     #
     exit()
 #
+# 利益集計
+#    -b (gmo|coin) <symbol> <period>
+#       <period>    :: [<from-date>]:[<to-date>]
+#       <date>      :: yyyy-mm-dd
+#
+if len(opts) >= 5 and opts[1] == '-b':
+    value = None
+    exchange = opts[2]
+    symbol = opts[3]
+    period = opts[4]
+    if exchange in ['gmo','coin']:
+        if exchange == 'gmo':
+            exchange = 'gmocoin'
+        else:
+            exchange = 'coincheck'
+        #
+        if symbol in ['btc', 'BTC']:
+            if period.find(':') != -1:
+                fdate = period[:period.find(':')]
+                tdate = period[period.find(':')+1:]
+                benefit = db.get_benefit(exchange, symbol, fdate, tdate)
+                if benefit != None:
+                    print(f">{exchange}:{symbol}:Benefit = {benefit:,}")
+            else:
+                print(f">illegal period[{period}]!!")
+        else:
+            print(f">illegal symbol[{symbol}]!!")
+    else:
+        print(f">illegal exchange[{exchange}]!!")
+    #
+    exit()
+#
 # テーブルの更新
 #    -u  (trigger|orders) <key-val> <item> [<value>]
 #       <key-val>   :: key-value(seqnum|id)
@@ -257,6 +300,7 @@ if len(opts) > 0:
     exit() 
 #
 print('<< Auto-trade start >>')
+
 if delval != None:
     last_datetime = last_datetime(delval, delopt) 
     db.delete_ratelogs(last_datetime)
