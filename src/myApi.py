@@ -61,7 +61,7 @@ def time_stamp():
 # return the datetime the specified term ago.
 #
 def last_datetime(value, span):
-    print(f"value={value}, span={span}")
+    #print(f"value={value}, span={span}")
     now_date = datetime.today().date()
     yy = now_date.year
     mm = now_date.month
@@ -76,6 +76,9 @@ def last_datetime(value, span):
             mm = (mm-1)%12 + 1
         elif span == 'y':
             yy -= value
+        #print(f"yymmdd:{yy}-{mm}-{dd}")
+        if dd == 29:
+            dd -= 1
         days = now_date - datetime(yy, mm, dd).date()
     else:
         days = timedelta(days = value)
