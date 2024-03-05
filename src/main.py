@@ -123,7 +123,19 @@ if len(opts) > 1 and opts[1] == '-h':
     print(" -b (gmo|coin) <symbol> [<from-date>]:[<to-date>]")
     print(" -u (trigger|orders) <key-val> <item> [<value>]")
     print(" -d([0-9]+)[y|m|d]")
+    print(" -H [-t]")
     exit()
+#
+dontSampling = False
+updateTrigger = True
+if len(opts) > 1 and opts[1] == '-H':
+    # ヘッダ部の表示のみで終了する
+    dontSampling = True
+    # 自動取引トリガーの更新をスキップする
+    updateTrigger = False
+    if len(opts) > 2 and opts[2] == '-t':
+        # 自動取引トリガーを更新する
+        updateTrigger = True
 #
 # 現物取引の注文（成行）実行
 #    -t (gmo|coin) <symbol> (buy|sell) <size> [<rate>]
@@ -170,11 +182,6 @@ if len(opts) >= 6 and opts[1] == '-t':
             print(f">ID={id}")
     else:
         print(f">illegal argument[{illegal}]!!:  -t (gmo|coin) (btc|eth) (buy|sell) <size> ")
-    exit()
-elif len(opts) > 1 and opts[1] == '-h':
-    print(f"-t (gmo|coin) <symbol> (buy|sell) <size> [<rate>]")
-    print(f"-c  (gmo|coin) <id>")
-    print(f"-d([0-9]+)[y|m|d]")
     exit()
 #
 # 現物取引の注文（成行）取り消し
@@ -309,20 +316,21 @@ if delval != None:
 #
 # 自動取引のトリガー（レート値）登録
 #
-print(f"<< tigger >>")
-for sym in auto_coin_symbols:
-    print(f" -- {sym} --")
-    if target_rate[sym] != None:
-        print(f"{sym}:{target_rate[sym]}")
-    if buy_rate[sym] != None:
-        print(f"{sym}_buy_rate  :{buy_rate[sym]}")
-        db.insert_trigger(sym, TRADE_BUY, buy_rate[sym].split())
-    if sell_rate[sym] != None:
-        print(f"{sym}_sell_rate :{sell_rate[sym]}")
-        db.insert_trigger(sym, TRADE_SELL, sell_rate[sym].split())
-print('-')
-print(f"< hist_continuing >  = {hist_continuing}")
-print(f"< order_amount_jpy > = {order_amount_jpy}")
+if updateTrigger:
+    print(f"<< tigger >>")
+    for sym in auto_coin_symbols:
+        print(f" -- {sym} --")
+        if target_rate[sym] != None:
+            print(f"{sym}:{target_rate[sym]}")
+        if buy_rate[sym] != None:
+            print(f"{sym}_buy_rate  :{buy_rate[sym]}")
+            db.insert_trigger(sym, TRADE_BUY, buy_rate[sym].split())
+        if sell_rate[sym] != None:
+            print(f"{sym}_sell_rate :{sell_rate[sym]}")
+            db.insert_trigger(sym, TRADE_SELL, sell_rate[sym].split())
+    print('-')
+    print(f"< hist_continuing >  = {hist_continuing}")
+    print(f"< order_amount_jpy > = {order_amount_jpy}")
 #
 # 現在資産残高表示
 #
@@ -454,6 +462,11 @@ if result['status'] == 0:
         print('>latest execution none')
 else:
     print('>respons status error!!')
+#
+#
+if dontSampling:
+    # ヘッダ部の表示のみで終了する
+    exit(0)
 #
 #################
 #  直近取得レート
@@ -622,27 +635,37 @@ def ticker(arg1, arg2):
                 db.insert_ratelogs(EXCHANGE_CHECK, sym, rate)
                 #
                 if last_rate[sym] != None:
-                    if db.check_sell_tradeRate(sym, rate, last_rate[sym]) == True:
+                    # 「売り」のトリガーチェック
+                    rs = db.check_sell_tradeRate(sym, rate, last_rate[sym])
+                    if rs != None:
                         tradeSymbol = key
-                        if db.execType() != 'STOP':
+                        exchange = rs['exchange']
+                        if rs['exectype'] != 'STOP':
                             trade = TRADE_SELL
                         else:
                             trade = TRADE_BUY
-                    elif db.check_buy_tradeRate(sym, rate, last_rate[sym]) == True:
-                        tradeSymbol = key
-                        if db.execType() != 'STOP':
-                            trade = TRADE_BUY
-                        else:
-                            trade = TRADE_SELL
-                    elif db.check_tradeRate(TRADE_SELL, sym, rate, last_rate[sym]) == True:
-                        tradeSymbol = key
-                        trade = TRADE_SELL
-                    elif db.check_tradeRate(TRADE_BUY, sym, rate, last_rate[sym]) == True:
-                        tradeSymbol = key
-                        trade = TRADE_BUY
                     else:
-                        tradeSymbol = None
-                        trade = None
+                        # 「買い」のトリガーチェック
+                        rs = db.check_buy_tradeRate(sym, rate, last_rate[sym])
+                        if rs != None:
+                            tradeSymbol = key
+                            exchange = rs['exchange']
+                            if rs['exectype'] != 'STOP':
+                                trade = TRADE_BUY
+                            else:
+                                trade = TRADE_SELL
+                        # 警報のトリガーチェック
+                        elif db.check_tradeRate(TRADE_SELL, sym, rate, last_rate[sym]) == True:
+                            tradeSymbol = key
+                            exchange = '*'
+                            trade = TRADE_SELL
+                        elif db.check_tradeRate(TRADE_BUY, sym, rate, last_rate[sym]) == True:
+                            tradeSymbol = key
+                            exchange = '*'
+                            trade = TRADE_BUY
+                        else:
+                            tradeSymbol = None
+                            trade = None
                 if tradeSymbol != None:
                     # send gmail or execute auto-trade
                     if trade == TRADE_SELL:
@@ -650,7 +673,7 @@ def ticker(arg1, arg2):
                     else:
                         title =f"自動取引（{tradeSymbol}の買い）"
                     #
-                    exchange = db.toExchange()
+                    #exchange = rs['exchange']
                     #print(f"exchange:{exchange}")
                     if exchange == None:
                         title += "通知"
@@ -663,9 +686,9 @@ def ticker(arg1, arg2):
                         id = exec_trade(exchange, 
                                         tradeSymbol, 
                                         trade,
-                                        db.execType(),  
+                                        rs['exectype'],  
                                         rate,
-                                        db.execAmount())
+                                        rs['amount'])
                         if id != 0:
                             title += f"実行（{id}）"
                         else:
@@ -675,9 +698,11 @@ def ticker(arg1, arg2):
                          + f"{last_rate[sym]:13,.3f}　-> {rate:13,.3f}"\
                          + f"（{((rate - last_rate[sym])/last_rate[sym]*100):5,.2f}%）"
                     if trade == TRADE_SELL:
-                        alert_text = colored_16(STYLE_BLINK,FG_BLUE,BG_BLACK,f"<<--- send alart mail({trade}:{text})  --->>")
+                        alert_text = colored_16(STYLE_BLINK,FG_GREEN,BG_BLACK,\
+                                        f"<<--- send alart mail({trade}:{text})  --->>")
                     else:
-                        alert_text = colored_16(STYLE_BLINK,FG_RED,BG_BLACK,f"<<--- send alart mail({trade}:{text})  --->>")
+                        alert_text = colored_16(STYLE_BLINK,FG_RED,BG_BLACK,\
+                                        f"<<--- send alart mail({trade}:{text})  --->>")
                     print(alert_text + colored_reset())
                     # send gmail
                     send_gmail( to_address=address, subject=title, body=text)

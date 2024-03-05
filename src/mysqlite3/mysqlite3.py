@@ -17,10 +17,6 @@ class MyDb:
         self.conn = sqlite3.connect(dbpath)
         self.conn.row_factory = sqlite3.Row
         self.cur = self.conn.cursor()
-        self.to_exchange = None
-        self.exec_type = None
-        self.exec_amount = None
-        #self.l_histogram = None
 
     def rollback(self):
         self.conn.rollback()
@@ -33,16 +29,6 @@ class MyDb:
 
     def execute(self, sql):
         return self.cur.execute(sql)
-
-    def toExchange(self):
-        return self.to_exchange
-
-    def execType(self):
-        return self.exec_type
-
-    def execAmount(self):
-        return self.exec_amount
-
 #
 # insert or update balance-table
 #
@@ -201,6 +187,7 @@ class MyDb:
         return ret
 #
 # insert trigger info. for auto-trade
+#   trigger :: '<target-rate>!<scenario>:<exchange-office>:<amount>'
 #  
     def insert_trigger(self, symbol, trade, ratelist):
         # delete old datas
@@ -209,7 +196,7 @@ class MyDb:
         self.cur.execute(sql)
         # insert new datas
         for rate in ratelist:
-            if rate[:1].isdigit() == True:
+            if rate[0] == '-' or rate[0].isdigit() == True:
                 exchange = None
                 amount = None
                 method = None
@@ -230,11 +217,14 @@ class MyDb:
                     exchange = '*'
                 sql += ")"
                 #
+                '''
                 if rate[0] == '-':
                     exectype = 'STOP'
                     rate = rate[1:]
                 else:
                     exectype = 'MARKET'
+                '''
+                exectype = 'MARKET'
                 #
                 sql += f" values('{symbol}','{trade}',{rate},'{exectype}','{exchange}'"
                 if amount != None:
@@ -270,8 +260,6 @@ class MyDb:
 #      
     def check_tradeRate(self, trade, symbol, c_rate, l_rate):
         ret = False
-        self.to_exchange = None
-        self.exec_amount = None
         sql = "select * from trigger where "\
             + f"trade='{trade}' and symbol='{symbol}' and "\
             + f"count=0 and method='IM' and "
@@ -287,9 +275,6 @@ class MyDb:
         #print(sql)
         rs = self.cur.execute(sql).fetchone()
         if rs != None:
-            self.to_exchange = rs['exchange']
-            self.exec_amount = rs['amount']
-            self.exec_type = rs['exectype']
             count = rs['count']
             seqnum = rs['seqnum']
             timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
@@ -319,191 +304,215 @@ class MyDb:
 #       l_rate: 前回のレート
 #      
     def check_sell_tradeRate(self, symbol, c_rate, l_rate):
-        self.to_exchange = None
-        self.exec_amount = None
-        self.exec_type = None
-
+        #
         sql = "select * from trigger where "\
             + f"trade='sell' and symbol='{symbol}' and count <> 2"        
         rs = self.cur.execute(sql).fetchone()
         #
-        ret = False
+        rsAry = []
+        while rs != None:
+            if rs['exchange'] != '*' :
+                rsAry.append( {'seqnum':rs['seqnum'],\
+                               'exchange':rs['exchange'],\
+                               'method':rs['method'].upper(),\
+                               'exectype':rs['exectype'],\
+                               'rate':rs['rate'],\
+                               'amount': rs['amount'],\
+                               'count':rs['count'],\
+                               'histgram':rs['histgram'],\
+                               'continuing':rs['continuing']} )
+            #
+            # read next record
+            rs = self.cur.fetchone()
+        #
+        ret = None
         method = ''
         b_rate = 0.0
         count = countA = 0
         #
-        while rs != None:
-            if rs['exchange'] != '*' :
-                seqnum = rs['seqnum']
-                b_rate = t_rate = rs['rate']            # 取引基準レート
-                countA = count = rs['count']
-                hist = rs['histgram']
-                cont = rs['continuing']
-                method = rs['method'].upper()           # 自動取引シナリオ
-                #print(f"sell:{t_rate}:{method}:{l_rate} -> {c_rate}")
+        for rs in rsAry:
+            seqnum = rs['seqnum']
+            b_rate = t_rate = rs['rate']            # 取引基準レート
+            countA = count = rs['count']
+            hist = rs['histgram']
+            cont = rs['continuing']
+            method = rs['method'].upper()           # 自動取引シナリオ
+            #print(f"sell:{t_rate}:{method}:{l_rate} -> {c_rate}")
 
-                self.to_exchange = rs['exchange']       # 取引所
-                self.exec_amount = rs['amount']         # 取引数量
-                self.exec_type = rs['exectype']         # 現物取引：'MARKET'
+            exchange = rs['exchange']               # 取引所
+            if 'IM' in method:              # 指値
+                if c_rate >= t_rate and t_rate > l_rate:
+                    # 目標レートを超えた
+                    countA = 2
+                    ret = rs
+                    #break
+            elif 'DX' in method:            # MACD デッドクロス
+                # 統計値の取得
+                signe = self.get_macd_signe(symbol)
+                if 'SIG' in method:
+                    # 目標レートの設定
+                    t_rate = self.get_targetRate('sell', method, signe['upper'], signe['std'])
+                    if b_rate != 0.0 and b_rate > t_rate:
+                        t_rate = b_rate
+                elif b_rate <= 0.0:                     
+                    # 直近の買いレートの割り増し
+                    order = self.get_lastOrder(exchange, symbol, 'buy')
+                    t_rate = b_rate = order['rate']*(1.0 + abs(b_rate))
                 #
-                if 'IM' in method:              # 指値
-                    if c_rate >= t_rate and t_rate > l_rate:
+                if c_rate >= t_rate:
+                    if count == 0  and t_rate > l_rate:
                         # 目標レートを超えた
-                        countA = 2
-                        ret = True
-                        break
-                elif 'DX' in method:            # MACD デッドクロス
-                    # 統計値の取得
-                    signe = self.get_macd_signe(symbol)
-                    if 'SIG' in method:
-                        # 目標レートの設定
-                        t_rate = self.get_targetRate('sell', method, signe['upper'], signe['std'])
-                        if b_rate != 0.0 and b_rate > t_rate:
-                            t_rate = b_rate
-                    elif b_rate == 0.0:                     
-                        order = self.get_lastOrder(self.to_exchange, symbol, 'buy')
-                        t_rate = b_rate = order['rate']     # 直近の買いレート
-                    #
-                    if c_rate >= t_rate:
-                        if count == 0  and t_rate > l_rate:
-                            # 目標レートを超えた
-                            if signe['histgram'] > 0:
-                                self.print_signal(signe, hist)
-                                #
-                                countA = 1
-                                hist = 0.0
-                                cont = 0
-                                break
-                        elif count == 1:
+                        if signe['histgram'] > 0:
                             self.print_signal(signe, hist)
                             #
-                            if abs(signe['histgram']) <= abs(hist):
-                                # ヒストグラムの連続減少回数のカウントアップ
-                                # ヒストグラム：MACDとシグナル線の乖離
-                                cont += 1 
-                            else:
-                                cont = 0
-                            hist = signe['histgram']
-                            if ( hist <= 0 or (hist > 0 and cont >= hist_continuing)):
-                                # デッドクロスを超えた、又は指定回数連続してヒストグラムの減少
-                                countA = 2
-                                ret = True      # 「売り」の実行トリガー 
-                            break
+                            countA = 1
+                            hist = 0.0
+                            cont = 0
+                            #break
                     elif count == 1:
-                        # 目標レートを下回った
-                        countA = 0
-                        break
-            # read next record
-            rs = self.cur.fetchone()
-        #
-        if countA != count or ( ('DX' in method) and count == 1 ):
-            # update the control parmeter-count, histgram, continuing in trigger-table
-            if countA != count or cont != 0:
-                self.print_state_change(ret, count, countA, cont, \
-                            seqnum, symbol, 'SELL', method, b_rate, t_rate)
+                        self.print_signal(signe, hist)
+                        #
+                        if abs(signe['histgram']) <= abs(hist):
+                            # ヒストグラムの連続減少回数のカウントアップ
+                            # ヒストグラム：MACDとシグナル線の乖離
+                            cont += 1 
+                        else:
+                            cont = 0
+                        hist = signe['histgram']
+                        if ( hist <= 0 or (hist > 0 and cont >= hist_continuing)):
+                            # デッドクロスを超えた、又は指定回数連続してヒストグラムの減少
+                            countA = 2
+                            ret = rs      # 「売り」の実行トリガー
+                        #break
+                elif count == 1:
+                    # 目標レートを下回った
+                    countA = 0
+                    #break
             #
-            timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-            sql = f"update trigger set count={countA},"\
-                + f"histgram={hist},continuing={cont},updated_at='{timestamp}'"\
-                + f" where seqnum={seqnum}"
-            self.cur.execute(sql)
-            self.conn.commit()
-        #
+            if countA != count or ( ('DX' in method) and count == 1 ):
+                # update the control parmeter-count, histgram, continuing in trigger-table
+                if countA != count or cont != 0:
+                    self.print_state_change(ret, count, countA, cont, \
+                                seqnum, symbol, 'SELL', method, b_rate, t_rate)
+                #
+                timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                sql = f"update trigger set count={countA},"\
+                    + f"histgram={hist},continuing={cont},updated_at='{timestamp}'"\
+                    + f" where seqnum={seqnum}"
+                self.cur.execute(sql)
+                self.conn.commit()
+            #
+            if ret != None:
+                # 実行条件に合致したトリガーがあった！！
+                break
         return ret
 #
 # 自動取引（買い）のトリガーチェック
 #         
     def check_buy_tradeRate(self, symbol, c_rate, l_rate):
-        self.to_exchange = None
-        self.exec_amount = None
-        self.exec_type = None
-
+        #
         sql = "select * from trigger where "\
             + f"trade='buy' and symbol='{symbol}' and count <> 2"        
         rs = self.cur.execute(sql).fetchone()
         #
-        ret = False
+        rsAry = []
+        while rs != None:
+            if rs['exchange'] != '*' :
+                #
+                rsAry.append( {'seqnum':rs['seqnum'],\
+                               'exchange':rs['exchange'],\
+                               'method':rs['method'].upper(),\
+                               'exectype':rs['exectype'],\
+                               'rate':rs['rate'],\
+                               'amount': rs['amount'],\
+                               'count':rs['count'],\
+                               'histgram':rs['histgram'],\
+                               'continuing':rs['continuing']} )
+            # read next record
+            rs = self.cur.fetchone()
+        #print(len(rsAry))
+        #
+        ret = None
         count = countA = 0
         method = ''
         b_rate = 0.0
         #
-        while rs != None:
-            if rs['exchange'] != '*' :
-                seqnum = rs['seqnum']
-                b_rate = t_rate = rs['rate']
-                countA = count = rs['count']
-                hist = rs['histgram']
-                cont = rs['continuing']
-                method = rs['method'].upper()
-                #print(f"buy :{t_rate}:{method}:{l_rate} -> {c_rate}")
+        for rs in rsAry:
+            seqnum = rs['seqnum']
+            b_rate = t_rate = rs['rate']
+            countA = count = rs['count']
+            hist = rs['histgram']
+            cont = rs['continuing']
+            method = rs['method'].upper()
+            #print(f"buy :{t_rate}:{method}:{l_rate} -> {c_rate}")
 
-                self.to_exchange = rs['exchange']
-                self.exec_amount = rs['amount']
-                self.exec_type = rs['exectype']
+            exchange = rs['exchange']
+            #
+            if 'IM' in method:          # 指値
+                if c_rate <= t_rate and t_rate < l_rate:
+                    # 目標レートを下回った
+                    countA = 2
+                    ret = rs
+                    #break
+            elif 'GX' in method:        # MACD ゴールデンクロス
+                # 統計値の取得
+                signe = self.get_macd_signe(symbol)
+                if 'SIG' in method:
+                    # 目標レートの設定
+                    t_rate = self.get_targetRate('buy', method, signe['lower'], signe['std'])
+                    if b_rate != 0.0 and b_rate < t_rate:
+                        t_rate = b_rate
+                elif b_rate <= 0.0:                     
+                    # 直近の売りレートから割引
+                    order = self.get_lastOrder(exchange, symbol, 'sell')
+                    t_rate = b_rate = order['rate']*(1.0 - abs(b_rate))
                 #
-                if 'IM' in method:          # 指値
-                    if c_rate <= t_rate and t_rate < l_rate:
+                if c_rate <= t_rate:
+                    if count == 0  and t_rate < l_rate:
                         # 目標レートを下回った
-                        countA = 2
-                        ret = True
-                        break
-                elif 'GX' in method:        # MACD ゴールデンクロス
-                    # 統計値の取得
-                    signe = self.get_macd_signe(symbol)
-                    if 'SIG' in method:
-                        # 目標レートの設定
-                        t_rate = self.get_targetRate('buy', method, signe['lower'], signe['std'])
-                        if b_rate != 0.0 and b_rate < t_rate:
-                            t_rate = b_rate
-                    elif b_rate == 0.0:                     
-                        order = self.get_lastOrder(self.to_exchange, symbol, 'sell')
-                        t_rate = b_rate = order['rate']     # 直近の売りレート
-                   #
-                    if c_rate <= t_rate:
-                        if count == 0  and t_rate < l_rate:
-                            # 目標レートを下回った
-                            if signe['histgram'] < 0:
-                                self.print_signal(signe, hist)
-                                #
-                                countA = 1
-                                hist = 0.0
-                                cont = 0
-                                break
-                        elif count == 1:
+                        if signe['histgram'] < 0:
                             self.print_signal(signe, hist)
                             #
-                            if abs(signe['histgram']) <= abs(hist):
-                                # ヒストグラムの連続減少回数のカウントアップ
-                                # ヒストグラム：MACDとシグナル線の乖離
-                                cont += 1 
-                            else:
-                                cont = 0
-                            hist = signe['histgram']
-                            if ( hist >= 0 or (hist < 0 and cont >= hist_continuing)):
-                                # ゴールデンクロスを超えた、又は指定回数連続してヒストグラムの減少
-                                countA = 2
-                                ret = True      # 「買い」の実行トリガー 
-                            break
+                            countA = 1
+                            hist = 0.0
+                            cont = 0
+                            #break
                     elif count == 1:
-                        # 目標レートを超えた
-                        countA = 0
-                        break
-                #
-            # read next record
-            rs = self.cur.fetchone()
-        #
-        if countA != count or ( ('GX' in method) and count == 1 ):
-            # update the control parmeter-count 
-            if countA != count or cont != 0:
-                self.print_state_change(ret, count, countA, cont, \
-                            seqnum, symbol, 'BUY', method, b_rate, t_rate)
+                        self.print_signal(signe, hist)
+                        #
+                        if abs(signe['histgram']) <= abs(hist):
+                            # ヒストグラムの連続減少回数のカウントアップ
+                            # ヒストグラム：MACDとシグナル線の乖離
+                            cont += 1 
+                        else:
+                            cont = 0
+                        hist = signe['histgram']
+                        if ( hist >= 0 or (hist < 0 and cont >= hist_continuing)):
+                            # ゴールデンクロスを超えた、又は指定回数連続してヒストグラムの減少
+                            countA = 2
+                            ret = rs      # 「買い」の実行トリガー 
+                        #break
+                elif count == 1:
+                    # 目標レートを超えた
+                    countA = 0
+                    #break
             #
-            timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-            sql = f"update trigger set count={countA},"\
-                + f"histgram={hist},continuing={cont},updated_at='{timestamp}'"\
-                + f" where seqnum={seqnum}"
-            self.cur.execute(sql)
-            self.conn.commit()
+            if countA != count or ( ('GX' in method) and count == 1 ):
+                # update the control parmeter-count 
+                if countA != count or cont != 0:
+                    self.print_state_change(ret, count, countA, cont, \
+                                seqnum, symbol, 'BUY', method, b_rate, t_rate)
+                #
+                timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                sql = f"update trigger set count={countA},"\
+                    + f"histgram={hist},continuing={cont},updated_at='{timestamp}'"\
+                    + f" where seqnum={seqnum}"
+                self.cur.execute(sql)
+                self.conn.commit()
+            # 
+            if ret != None:
+                # 実行条件に合致したトリガーがあった！！
+                break
         #
         return ret
 #
@@ -605,9 +614,16 @@ class MyDb:
 #
     def print_state_change(self, rslt, b_count, a_count, cont, seq, sym, trade, method, b_rate, t_rate):
         print_text =''
+        if rslt == None:
+            rslt = False
+        else:
+            rslt = True
+        #
         if a_count == 1:
+            print_text = colored_16(STYLE_NON,FG_YELLOW,BG_BLACK,f"")
+        elif a_count == 2:
             print_text = colored_16(STYLE_NON,FG_GREEN,BG_BLACK,f"")
-        if a_count == 2:
+        elif a_count == 0 and b_count == 1:
             print_text = colored_16(STYLE_NON,FG_BLUE,BG_BLACK,f"")
         #
         print_text += f"   >{trade}({sym}):{rslt}:{b_count}->{a_count}:"\
