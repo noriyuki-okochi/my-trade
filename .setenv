@@ -1,5 +1,8 @@
+#
+# レートサンプリングパラメータ
+#
 SLEEP_DAYS=7                # レートサンプリング継続（プログラムの生存）日数
-BLINK_RATE=5.0              # レートブリンク表示閾値（変動率%）
+BLINK_RATE=5.8              # レートブリンク表示閾値（変動率%）
 DEL_SPAN_VALUE=1            # レートログの保存期間
 DEL_SPAN_OPT="y"            # レートログの保存期間単位('y'|'m'|'d')
 
@@ -7,7 +10,7 @@ DEL_SPAN_OPT="y"            # レートログの保存期間単位('y'|'m'|'d')
 AUTO_COIN_SYMBOLS="btc eth iost"
 #買自動取引時のデフォルト取引量（円）
 ORDER_AMOUNT_JPY=15000
-#
+# 対象通貨量（通貨によって異なるので未参照）
 ORDER_AMOUNT=50000
 #
 # DX/GX判定時のヒストグラム連続増減カウント
@@ -23,53 +26,61 @@ HIST_CONTINUING=5
 #   (ex.)
 #   buy-scenario
 #       6450000.0!im:gmocoin:0.001          : 指定レートの指値と同等
+#           -0.05!im:gmocoin:0.001          : 直近売りレート5%割り引きの指値と同等
 #       6450000.0!gx:gmocoin:0.002          ：指定レート以下のゴールデンクロス
-#             0.0!gx:gmocoin:0.002          ：直近売りレート以下のゴールデンクロス
+#           -0.05!gx:gmocoin:0.002          ：直近売りレート5%割り引き以下のゴールデンクロス
 #             0.0!gxSig:gmocoin:0.002       ：2σ（標準偏差）以下のゴールデンクロス
 #       6450000.0!gxSIg:gmocoin:0.002       ：指定レートかつ2σ（標準偏差）以下のゴールデンクロス
+#           -0.05!gxSIg:gmocoin:0.002       ：直近売りレート5%割り引きかつ2σ（標準偏差）以下のゴールデンクロス
 #             0.0!gxSig1.5:gmocoin:0.002    ：1.5σ（標準偏差）以下のゴールデンクロス
 #
 #       <amount> = 0.0のとき、ORDER_AMOUNT_JPYで指定した円と実行時のレートから計算
 #
 #   sell-scenario
 #       6450000.0!im:gmocoin:0.001
+#           -0.05!im:gmocoin:0.001          : 直近買いレート5%割り増しの指値と同等
 #       6450000.0!dx:coincheck:0.002
+#           -0.05!dx:gmocoin:0.002          ：直近買いレート5%割り増し以上のデッドクロス
+#             0.0!dxSig:gmocoin:0.002       ：2σ（標準偏差）以上のデッドクロス
+#       6450000.0!dxSIg:gmocoin:0.002       ：指定レートかつ2σ（標準偏差）以上のデッドクロス
+#           -0.05!dxSIg:gmocoin:0.002       ：直近買いレート5%割り増しかつ2σ（標準偏差）以上のデッドクロス
+#             0.0!dxSig1.5:gmocoin:0.002    ：1.5σ（標準偏差）以上のデッドクロス
 #
 #       <amount> = 0.0のとき、実行時の保有量全て
 #
 #   only alart-messege
 #       6450000.0:*:0.000
-#   only report-messege
 #       6450000.0
 #   
-BTC_BUY_RATE="0.0!gxSig:gmocoin:0.002 7650000.0!gxSig1.75:gmocoin:0.001 7650000.0!gx:gmocoin:0.002 7650000.0!im:gmocoin:0.002"
-BTC_SELL_RATE="8000000.0!im:gmocoin:0.00 0.0!dxSig:gmocoin:0.002 0.0!dxSig1.5:gmocoin:0.001  0.0!dx:gmocoin:0.001"
+BTC_BUY_RATE="#10600000!im:gmocoin:0.002 0.0!gxSig:gmocoin:0.002 0.0!gxSig1.25:gmocoin:0.002 0.0!gxSig1.0:gmocoin:0.002 0.0!gxSig1.5:gmocoin:0.002 -0.05!gx:gmocoin:0.002 "
+BTC_SELL_RATE="11500000!im:gmocoin:0.00 10000000!dxSig:gmocoin:0.002 10000000!dxSig1.25:gmocoin:0.002 10000000!dxSig1.50:gmocoin:0.002 -0.05!dx:gmocoin:0.002"
 
 ETH_BUY_RATE=""
 ETH_SELL_RATE=""
 
-MATIC_BUY_RATE="104.0"
-MATIC_SELL_RATE="122.5"
+MATIC_BUY_RATE="#104.0"
+MATIC_SELL_RATE="#122.5"
 
-IOST_BUY_RATE="1.20"
-IOST_SELL_RATE="1.43"
-
+IOST_BUY_RATE="1.650"
+IOST_SELL_RATE="1.920 2.170"
+#
 #チャート表示
+#
 COIN_SYMBOLS="btc eth iost matic"
 #警報値
-BTC_TARGET_RATE="7800000.0"
-ETH_TARGET_RATE=""
-MATIC_TARGET_RATE="113.5"
-IOST_TARGET_RATE="1.342"
+BTC_TARGET_RATE="10600000.0"
+ETH_TARGET_RATE="500000.0"
+MATIC_TARGET_RATE="155.5"
+IOST_TARGET_RATE="1.870"
 #基準（購入）レート
-BTC_BASE_RATE=7800000.0
-ETH_BASE_RATE=240000.0
-MATIC_BASE_RATE=113.5
-IOST_BASE_RATE=1.342
+BTC_BASE_RATE=10600000.0
+ETH_BASE_RATE=500000.0
+MATIC_BASE_RATE=155.5
+IOST_BASE_RATE=1.870
 #スプレッド(%)
 BTC_SP_RATE=0.05
 ETH_SP_RATE=0.05
-MATIC_SP_RATE=0.05
+MATIC_SP_RATE=0.04
 IOST_SP_RATE=0.05
 
 export SLEEP_DAYS
