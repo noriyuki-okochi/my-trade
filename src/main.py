@@ -107,10 +107,12 @@ def exec_trade(exchange, symbol, trade, type, rate, amount=None):
 
     id = tradeObj.execOrder(symbol, trade, type, rate, amount)
     if id != None:
+        id = int(id)
         symbol = symbol.upper()
         rate = float(f"{rate:.3f}")
         amount = float(f"{amount:.4f}")
         db.insert_orders(id, exchange, symbol, trade.upper(), type, rate, amount)
+        db.adjust_balance(exchange, symbol, trade.upper(), amount)
     return id
 #
 # コマンド引数のチェック
@@ -118,35 +120,54 @@ def exec_trade(exchange, symbol, trade, type, rate, amount=None):
 opts = [opt for opt in args ]
 #
 if len(opts) > 1 and opts[1] == '-h':
-    print(" -t (gmo|coin) <symbol> (buy|sell) <size> [<rate>]")
-    print(" -c (gmo|coin) <id>")
-    print(" -b (gmo|coin) <symbol> [<from-date>]:[<to-date>]")
-    print(" -u (trigger|orders) <key-val> <item> [<value>]")
-    print(" -d([0-9]+)[y|m|d]")
-    print(" -H [-t]")
+    print(" -tRADE (gmo|coin) <symbol> (buy|sell) <size> [<rate>]")
+    print(" -tRADElOG (gmo|coin) <symbol> (buy|sell) <rate>")
+    print(" -cANCLE (gmo|coin) <id>")
+    print(" -bENEFIT (gmo|coin) <symbol> [<from-date>]:[<to-date>]")
+    print(" -uPDATE (trigger|orders) <key-val> <item> [<value>]")
+    print(" -dELETE([0-9]+)[y|m|d]")
+    print(" -Header [-t]")
+    print(" -sKIPUpdateTrigger")
     exit()
 #
 dontSampling = False
-updateTrigger = True
+updateTrigger = 3
+if len(opts) == 2 and opts[1] == '-s':
+    # 自動取引トリガーの更新をスキップする
+    updateTrigger = 0
+
 if len(opts) > 1 and opts[1] == '-H':
     # ヘッダ部の表示のみで終了する
     dontSampling = True
     # 自動取引トリガーの更新をスキップする
-    updateTrigger = False
-    if len(opts) > 2 and opts[2] == '-t':
+    updateTrigger = 0
+    if len(opts) > 2 and opts[2].startswith('-t'):
         # 自動取引トリガーを更新する
-        updateTrigger = True
+        updateTrigger = 3
+        if opts[2] == '-tb':
+            updateTrigger = 1
+        if opts[2] == '-ts':
+            updateTrigger = 2
+
 #
 # 現物取引の注文（成行）実行
 #    -t (gmo|coin) <symbol> (buy|sell) <size> [<rate>]
 #       <symbol>  :: {bit|eth}
 #       <size>    :: 9.99999
+# 現物取引の注文ログ登録
+#    -tl (gmo|coin) <symbol> (buy|sell) <rate>
+#       <timestamp>:: Y-m-d H:M:S
 ##
-if len(opts) >= 6 and opts[1] == '-t':
+if len(opts) >= 6 and (opts[1] == '-t' or opts[1] == '-tl'):
     exchange = opts[2]
     symbol = opts[3]
     side = opts[4]
-    size = opts[5]
+    if opts[1] == '-tl':
+        option = 'l'   
+        rate = opts[5]
+    else:        
+        option = 't'
+        size = opts[5]
     if exchange in ['coin','gmo']:
         if exchange == 'coin':
             exchange = EXCHANGE_CHECK
@@ -158,30 +179,52 @@ if len(opts) >= 6 and opts[1] == '-t':
         if not side in ['buy', 'sell']:
             illegal = side
             exchange = None 
-        if not is_float(size):
+        if option == 't' and (not is_float(size)):
             illegal = size
             exchange = None
         #
-        rate = 0.0
-        if len(opts) > 6:
-            rate = opts[6]
+        if option == 't':
+            rate = 0.0
+            if len(opts) > 6:
+                rate = opts[6]
+                if not is_float(rate):
+                    illegal = rate
+                    exchange = None
+        else:
+            print(f">Input timeStamp[YYYY-mm-dd HH:MM:SS'].")
+            timestamp = input('>>')
+            try:
+                d = datetime.strptime(timestamp, '%Y-%m-%d %H:%M:%S')
+            except ValueError:
+                illegal = timestamp
+                exchange = None
             if not is_float(rate):
-               illegal = rate
-               exchange = None
+                illegal = rate
+                exchange = None
     else:
         illegal = exchange
         exchange = None
     #   
     if exchange != None: 
-        amount = float(size)
-        #print(f">request {side}-order of {symbol}({size:8,.3f}) to {exchange}....")
-        print(f">Are you sure?[y/n].")
-        ans = input('>')
-        if ans == 'y':
-            id = exec_trade(exchange, symbol, side, 'MARKET', rate, amount)
-            print(f">ID={id}")
+        if option == 't':
+            amount = float(size)
+            #print(f">request {side}-order of {symbol}({size:8,.3f}) to {exchange}....")
+            print(f">Are you sure?[y/n].")
+            ans = input('>>')
+            if ans == 'y':
+                id = exec_trade(exchange, symbol, side, 'MARKET', rate, amount)
+                print(f">ID={id}")
+                if id != None:
+                    # insert to DB(ratelogs)
+                    db.insert_ratelogs(exchange, symbol+'_'+side, rate)
+        else:
+            # insert to DB(ratelogs)
+            db.insert_ratelogs(exchange, symbol+'_'+side, rate, timestamp)
     else:
-        print(f">illegal argument[{illegal}]!!:  -t (gmo|coin) (btc|eth) (buy|sell) <size> ")
+        if option == 't':
+            print(f">illegal argument[{illegal}]!!:  -t (gmo|coin) (btc|eth) (buy|sell) <size> ")
+        else:
+            print(f">illegal argument[{illegal}]!!:  -tl (gmo|coin) (btc|eth) (buy|sell) <rate> ")
     exit()
 #
 # 現物取引の注文（成行）取り消し
@@ -215,31 +258,33 @@ if len(opts) == 4 and opts[1] == '-c':
 #       <period>    :: [<from-date>]:[<to-date>]
 #       <date>      :: yyyy-mm-dd
 #
-if len(opts) >= 5 and opts[1] == '-b':
-    value = None
-    exchange = opts[2]
-    symbol = opts[3]
-    period = opts[4]
-    if exchange in ['gmo','coin']:
-        if exchange == 'gmo':
-            exchange = 'gmocoin'
-        else:
-            exchange = 'coincheck'
-        #
-        if symbol in ['btc', 'BTC']:
-            if period.find(':') != -1:
-                fdate = period[:period.find(':')]
-                tdate = period[period.find(':')+1:]
-                benefit = db.get_benefit(exchange, symbol, fdate, tdate)
-                if benefit != None:
-                    print(f">{exchange}:{symbol}:Benefit = {benefit:,}")
+if len(opts) > 1 and opts[1] == '-b':
+    if len(opts) >= 5:
+        value = None
+        exchange = opts[2]
+        symbol = opts[3]
+        period = opts[4]
+        if exchange in ['gmo','coin']:
+            if exchange == 'gmo':
+                exchange = 'gmocoin'
             else:
-                print(f">illegal period[{period}]!!")
+                exchange = 'coincheck'
+            #
+            if symbol in ['btc', 'BTC']:
+                if period.find(':') != -1:
+                    fdate = period[:period.find(':')]
+                    tdate = period[period.find(':')+1:]
+                    benefit = db.get_benefit(exchange, symbol, fdate, tdate)
+                    if benefit != None:
+                        print(f">{exchange}:{symbol}:Benefit = {benefit:,}")
+                else:
+                    print(f">illegal period[{period}]!!")
+            else:
+                print(f">illegal symbol[{symbol}]!!")
         else:
-            print(f">illegal symbol[{symbol}]!!")
+            print(f">illegal exchange[{exchange}]!!")
     else:
-        print(f">illegal exchange[{exchange}]!!")
-    #
+        print(f">arguments is insufficient.!!")
     exit()
 #
 # テーブルの更新
@@ -316,16 +361,16 @@ if delval != None:
 #
 # 自動取引のトリガー（レート値）登録
 #
-if updateTrigger:
+if updateTrigger != 0:
     print(f"<< tigger >>")
     for sym in auto_coin_symbols:
         print(f" -- {sym} --")
         if target_rate[sym] != None:
             print(f"{sym}:{target_rate[sym]}")
-        if buy_rate[sym] != None:
+        if buy_rate[sym] != None and (updateTrigger & 1) != 0:
             print(f"{sym}_buy_rate  :{buy_rate[sym]}")
             db.insert_trigger(sym, TRADE_BUY, buy_rate[sym].split())
-        if sell_rate[sym] != None:
+        if sell_rate[sym] != None and (updateTrigger & 2) != 0:
             print(f"{sym}_sell_rate :{sell_rate[sym]}")
             db.insert_trigger(sym, TRADE_SELL, sell_rate[sym].split())
     print('-')
@@ -675,6 +720,9 @@ def ticker(arg1, arg2):
                     #
                     #exchange = rs['exchange']
                     #print(f"exchange:{exchange}")
+                    alart = 'alart'
+                    id = None
+                    amount = None
                     if exchange == None:
                         title += "通知"
                     elif exchange == '*':
@@ -691,21 +739,31 @@ def ticker(arg1, arg2):
                                         rs['amount'])
                         if id != 0:
                             title += f"実行（{id}）"
+                            alart = 'aouto'
+                            amount = rs['amount']
                         else:
                             title += f"実行（手動）"
+                            alart = 'manual'
                     #
                     text = f"{tradeSymbol:<4} :"\
                          + f"{last_rate[sym]:13,.3f}　-> {rate:13,.3f}"\
-                         + f"（{((rate - last_rate[sym])/last_rate[sym]*100):5,.2f}%）"
+                         + f"（{((rate - last_rate[sym])/last_rate[sym]*100):5,.2f}%）：{amount}"
                     if trade == TRADE_SELL:
+                        tradeSymbol = tradeSymbol + '_sell'
                         alert_text = colored_16(STYLE_BLINK,FG_GREEN,BG_BLACK,\
-                                        f"<<--- send alart mail({trade}:{text})  --->>")
+                                        f"<<--- send {alart} mail({trade}:{text})  --->>")
                     else:
-                        alert_text = colored_16(STYLE_BLINK,FG_RED,BG_BLACK,\
-                                        f"<<--- send alart mail({trade}:{text})  --->>")
+                        tradeSymbol = tradeSymbol + '_buy'
+                        alert_text = colored_16(STYLE_BLINK,FG_GREEN,BG_BLACK,\
+                                        f"<<--- send {alart} mail({trade}:{text})  --->>")
                     print(alert_text + colored_reset())
                     # send gmail
                     send_gmail( to_address=address, subject=title, body=text)
+                    if id != None and id != 0:
+                        print(f"insert auto-log({id}):{tradeSymbol}({rate})")
+                        # insert to DB(ratelogs)
+                        db.insert_ratelogs(exchange, tradeSymbol.lower(), rate)
+                    #
                     tradeSymbol = None
                 #
                 last_rate[sym] = rate
