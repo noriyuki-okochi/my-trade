@@ -70,6 +70,21 @@ class MyDb:
         print(f">get_balanceAmount=>amount={amount}:sql={sql}")
         return amount
 #
+# adjust amount 
+#  
+    def adjust_balance(self, exchange, symbol, trade, amount):
+        c_amount = self.get_balanceAmount(exchange, symbol)
+        if c_amount != None:
+            if trade == 'SELL':
+                c_cmount -= amount
+            else:     # 'BUY'
+                c_cmount += amount
+            sql = "update balance set amount = {c_amount} where "\
+                + f"exchange='{exchange}' and symbol='{symbol}'"
+            self.cur.execute(sql)
+            self.conn.commit()
+        return c_amount
+#
 # insert samplling rates logs.
 #
     def insert_ratelogs(self, exchange, symbol, rate, timestamp=None):
@@ -99,6 +114,52 @@ class MyDb:
         self.cur.execute(sql)
         #
         self.conn.commit()
+#
+# select the max rate from recent buy-orders-log
+#
+    def get_maxOrderBuyRate(self, exchange, pair):
+        result = None
+        # select last sell-record
+        sql = "select id from orders where "
+        sql += f" exchange = '{exchange}' and pair = '{pair.upper()}' and order_side = 'SELL' "
+        sql += f" order by id desc  limit 1"
+        #print(sql)
+        self.cur.execute(sql)
+        rs = self.cur.execute(sql).fetchone()
+        if rs != None:
+            id  = rs['id']
+            sql = "select max(rate) as max_rate from orders where "
+            sql += f" exchange = '{exchange}' and pair = '{pair.upper()}' and order_side = 'BUY' "
+            sql += f" and id > {id}"
+            #print(sql)
+            self.cur.execute(sql)
+            rs = self.cur.execute(sql).fetchone()
+            if rs != None:
+                result = rs['max_rate']
+        return result
+#
+# select the min rate from recent sell-orders-log
+#
+    def get_minOrderSellRate(self, exchange, pair):
+        result = None
+        # select last buy-record
+        sql = "select id from orders where "
+        sql += f" exchange = '{exchange}' and pair = '{pair.upper()}' and order_side = 'BUY' "
+        sql += f" order by id desc  limit 1"
+        #print(sql)
+        self.cur.execute(sql)
+        rs = self.cur.execute(sql).fetchone()
+        if rs != None:
+            id  = rs['id']
+            sql = "select min(rate) as min_rate from orders where "
+            sql += f" exchange = '{exchange}' and pair = '{pair.upper()}' and order_side = 'SELL' "
+            sql += f" and id > {id}"
+            #print(sql)
+            self.cur.execute(sql)
+            rs = self.cur.execute(sql).fetchone()
+            if rs != None:
+                result = rs['min_rate']
+        return result
 #
 # select the last order from orders-log
 #
@@ -137,9 +198,9 @@ class MyDb:
             jpy = rs['JPY']
             benefit = int(jpy)
             amt = rs['AMT']
-            rate = rs['RATE']
+            rate = benefit/amt
             count = rs['CNT']
-            print(f">Buy ={benefit:,}({amt:.3f} x {rate:.3f}) <{count}>")
+            print(f">Buy ={benefit:,}({amt:.4f} x {rate:.3f}) <{count}>")
             # SELL
             sql = "select sum(rate*amount) as JPY, sum(amount) as AMT, avg(rate) as RATE,"\
                   " count(*) as CNT from orders where order_side = 'SELL'"\
@@ -151,9 +212,9 @@ class MyDb:
                 jpy = rs['JPY']
                 jpy = int(jpy)
                 amt = rs['AMT']
-                rate = rs['RATE']
+                rate = jpy/amt
                 count = rs['CNT']
-                print(f">SELL={jpy:,}({amt:.3f} x {rate:.3f}) <{count}>")
+                print(f">SELL={jpy:,}({amt:.4f} x {rate:.3f}) <{count}>")
                 #
                 print(f">BeneFit={(jpy - benefit):,}({((jpy - benefit)*100/benefit):.2f}%)")
                 # 利益
@@ -262,7 +323,8 @@ class MyDb:
         ret = False
         sql = "select * from trigger where "\
             + f"trade='{trade}' and symbol='{symbol}' and "\
-            + f"count=0 and method='IM' and "
+            + f"method='IM' and "
+            #+ f"count=0 and method='IM' and "
         if trade == 'sell':
             if c_rate <= l_rate:
                 return ret
@@ -272,10 +334,10 @@ class MyDb:
                 return ret
             sql += f" (rate >= {c_rate} and rate < {l_rate})"
 
-        #print(sql)
         rs = self.cur.execute(sql).fetchone()
+        #print(f"{rs}:{sql}")
         if rs != None:
-            count = rs['count']
+            count = rs['count'] + 1
             seqnum = rs['seqnum']
             timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             sql = f"update trigger set count={count},updated_at='{timestamp}'"\
@@ -338,9 +400,22 @@ class MyDb:
             cont = rs['continuing']
             method = rs['method'].upper()           # 自動取引シナリオ
             #print(f"sell:{t_rate}:{method}:{l_rate} -> {c_rate}")
-
             exchange = rs['exchange']               # 取引所
+            if b_rate <= 0.0:
+                # 直近の買いレート
+                max_rate = self.get_maxOrderBuyRate(exchange, symbol)
+                #print(f"max_rate:{max_rate}")
+            #
             if 'IM' in method:              # 指値
+                if b_rate <= 0.0:
+                    # 直近の買いレートの割り増し
+                    if max_rate != None:
+                        t_rate = max_rate*(1.0 + abs(b_rate))
+                    else:
+                        t_rate = 0.0
+                else:
+                    t_rate = b_rate
+                #print(f"({method}):t_rate={t_rate}")
                 if c_rate >= t_rate and t_rate > l_rate:
                     # 目標レートを超えた
                     countA = 2
@@ -349,17 +424,33 @@ class MyDb:
             elif 'DX' in method:            # MACD デッドクロス
                 # 統計値の取得
                 signe = self.get_macd_signe(symbol)
+                #
                 if 'SIG' in method:
+                    if b_rate < 0.0:                     
+                        # 直近の買いレートの割り増し
+                        if max_rate != None:
+                            b_rate = max_rate*(1.0 + abs(b_rate))
+                        else:
+                            b_rate = 0.0
+                            countA = 0
+                            #print(f"({method}):target rate not found.")
                     # 目標レートの設定
                     t_rate = self.get_targetRate('sell', method, signe['upper'], signe['std'])
-                    if b_rate != 0.0 and b_rate > t_rate:
+                    if b_rate > t_rate:
                         t_rate = b_rate
-                elif b_rate <= 0.0:                     
-                    # 直近の買いレートの割り増し
-                    order = self.get_lastOrder(exchange, symbol, 'buy')
-                    t_rate = b_rate = order['rate']*(1.0 + abs(b_rate))
+                else:
+                    if b_rate <= 0.0:                     
+                        # 直近の買いレートの割り増し
+                        if max_rate != None:
+                            b_rate = max_rate*(1.0 + abs(b_rate))
+                        else:
+                            b_rate = 0.0
+                            countA = 0
+                            #print(f"({method}):target rate not found.")
+                    t_rate = b_rate
+                #print(f"({method}):t_rate={t_rate}")
                 #
-                if c_rate >= t_rate:
+                if t_rate != 0.0 and (c_rate >= t_rate):
                     if count == 0  and t_rate > l_rate:
                         # 目標レートを超えた
                         if signe['histgram'] > 0:
@@ -384,16 +475,17 @@ class MyDb:
                             countA = 2
                             ret = rs      # 「売り」の実行トリガー
                         #break
-                elif count == 1:
-                    # 目標レートを下回った
-                    countA = 0
+                else:
+                    if t_rate != 0.0 and count == 1:
+                        # 目標レートを下回った
+                        countA = 0
                     #break
             #
             if countA != count or ( ('DX' in method) and count == 1 ):
                 # update the control parmeter-count, histgram, continuing in trigger-table
                 if countA != count or cont != 0:
                     self.print_state_change(ret, count, countA, cont, \
-                                seqnum, symbol, 'SELL', method, b_rate, t_rate)
+                                seqnum, symbol, 'Sell', method, b_rate, t_rate)
                 #
                 timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
                 sql = f"update trigger set count={countA},"\
@@ -445,10 +537,22 @@ class MyDb:
             cont = rs['continuing']
             method = rs['method'].upper()
             #print(f"buy :{t_rate}:{method}:{l_rate} -> {c_rate}")
-
             exchange = rs['exchange']
+            if b_rate <= 0.0:                     
+                # 直近の売りレート
+                min_rate = self.get_minOrderSellRate(exchange, symbol)
+                #print(f"min_rate:{min_rate}")
             #
             if 'IM' in method:          # 指値
+                if b_rate <= 0.0:                     
+                    # 直近の売りレートから割引
+                    if min_rate != None:
+                        t_rate = min_rate*(1.0 - abs(b_rate))
+                    else:
+                        t_rate = 0.0
+                else:
+                    t_rate = b_rate
+                #print(f"({method}):t_rate={t_rate}")
                 if c_rate <= t_rate and t_rate < l_rate:
                     # 目標レートを下回った
                     countA = 2
@@ -458,14 +562,29 @@ class MyDb:
                 # 統計値の取得
                 signe = self.get_macd_signe(symbol)
                 if 'SIG' in method:
-                    # 目標レートの設定
+                    if b_rate < 0.0:                     
+                        # 直近の売りレートから割引
+                        if min_rate != None:
+                            b_rate = min_rate*(1.0 - abs(b_rate))
+                        else:
+                            b_rate = 0.0
+                            countA = 0
+                            #print(f"({method}):target rate not found.")
+            # 目標レートの設定
                     t_rate = self.get_targetRate('buy', method, signe['lower'], signe['std'])
-                    if b_rate != 0.0 and b_rate < t_rate:
+                    if (b_rate < t_rate) and b_rate != 0.0:
                         t_rate = b_rate
-                elif b_rate <= 0.0:                     
-                    # 直近の売りレートから割引
-                    order = self.get_lastOrder(exchange, symbol, 'sell')
-                    t_rate = b_rate = order['rate']*(1.0 - abs(b_rate))
+                else:
+                    if b_rate <= 0.0:                     
+                        # 直近の売りレートから割引
+                        if min_rate != None:
+                            b_rate = min_rate*(1.0 - abs(b_rate))
+                        else:
+                            b_rate = 0.0
+                            countA = 0
+                            #print(f"({method}):target rate not found.")
+                    t_rate = b_rate
+                #print(f"({method}):t_rate={t_rate}")
                 #
                 if c_rate <= t_rate:
                     if count == 0  and t_rate < l_rate:
@@ -492,16 +611,17 @@ class MyDb:
                             countA = 2
                             ret = rs      # 「買い」の実行トリガー 
                         #break
-                elif count == 1:
-                    # 目標レートを超えた
-                    countA = 0
+                else:
+                    if t_rate != 0.0 and count == 1:
+                        # 目標レートを超えた
+                        countA = 0
                     #break
             #
             if countA != count or ( ('GX' in method) and count == 1 ):
                 # update the control parmeter-count 
                 if countA != count or cont != 0:
                     self.print_state_change(ret, count, countA, cont, \
-                                seqnum, symbol, 'BUY', method, b_rate, t_rate)
+                                seqnum, symbol, 'Buy', method, b_rate, t_rate)
                 #
                 timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
                 sql = f"update trigger set count={countA},"\
@@ -520,7 +640,7 @@ class MyDb:
 #
     def pandas_read_ratelogs(self, params):
         if params['sym'] == '*':
-            sql ="select * from ratelogs"
+            sql ="select * from ratelogs where length(symbol) < 6"
         else:
             sql ="select * from ratelogs where symbol = :sym"
         if params['limit'] > 0:
