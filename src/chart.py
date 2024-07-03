@@ -22,7 +22,7 @@ from plotly.subplots import make_subplots
 print(os.getcwd())
 # print command line(arguments)
 #
-# chart.py {symbol1 [symbol2]|*} [display-days] [-past-days] [-m(asd)] [-d(ebug)]
+# chart.py {symbol1 [symbol2]|*} [display-days] [-past-days] [-m(asd)] [-a(uto)] [-d(ebug)]
 #
 args = sys.argv
 cmdline = ""
@@ -35,6 +35,7 @@ print('<< chart start >>')
 print(cmdline)
 #
 macd_flg = False        # not display MACD
+auto_flg = False        # auto-trade point
 last = (24*7*1)         # 24h*week-days*week(default is 1-week)
 # 
 selsyms = [sym for sym in args if sym in coin_symbols]
@@ -47,9 +48,18 @@ nums = [int(num) for num in args if num.isnumeric()]
 if len(nums) > 0:       # display days
     last = 24*nums[0]   #24h*days
 #
+a_opt = [opt for opt in args if opt.startswith('-a')]
+if len(a_opt):
+    auto_flg = True
+    auto_last = 0
+    #print(f"a_opt:{a_opt[0]}" )
+    if len(a_opt[0]) > 2 and a_opt[0][2:].isnumeric():
+        auto_last = 24*int(a_opt[0][2:])
+#
 opts = [opt for opt in args if opt.startswith('-')]
 if '-m' in opts and selnum == 1:    #MASD
     macd_flg = True
+#
 #
 if '-d' in opts:                    #debug write
     print(selsyms)
@@ -101,8 +111,7 @@ for sym in coin_symbols:
         #print(df.index)
         #print(df.count())
         #print(df)
-        '''
-        '''
+
         # convert to OHLC
         mdf = df['rate'].resample('H').ohlc()
         mdf.columns = ['Open', 'High', 'Low', 'Close']
@@ -132,20 +141,7 @@ for sym in coin_symbols:
         if mlast > last:
             mdf = mdf.head(last)
             mdfil = mdfil.head(last)
-        '''
-        fig = ff.create_candlestick(mdf.Open, mdf.High, 
-                            mdf.Low, mdf.Close, dates=mdf.index)
-        '''
-        '''
-        fig = go.Figure(
-            data=[go.Candlestick(x=mdf.index,
-                        open=mdf["Open"],
-                        high=mdf["High"],
-                        low=mdf["Low"],
-                        close=mdf["Close"],
-                        name="OHLC")]
-        )
-        '''
+        #
         #OHLC
         fig = fig.add_trace( go.Candlestick(x=mdf.index,
                                         name="ohlc",
@@ -251,6 +247,52 @@ for sym in coin_symbols:
                             row = irow, 
                             col = icol   
                         )
+
+        if auto_flg:
+            #
+            # read auto-trade-rate-data from db to pandas
+            #
+            sym_side = sym + '_buy'
+            params = {"sym":sym_side,"limit":limit}
+            df_buy = db.pandas_read_ratelogs(params)
+            buy_count =df_buy['rate'].count()
+            print(f"buy_count : {buy_count}")
+
+            sym_side = sym + '_sell'
+            params = {"sym":sym_side,"limit":limit}
+            df_sell = db.pandas_read_ratelogs(params)
+            sell_count =df_sell['rate'].count()
+            print(f"sell_count: {sell_count}")
+
+            # buy-rate by auto-trade
+            if buy_count > 0:
+                # resample and convert to max rate-value
+                mdf_buy = df_buy['rate'].resample('H').max()
+                if auto_last > 0:
+                    mdf_buy = mdf_buy.tail(auto_last)
+                fig = fig.add_trace( go.Scatter(x=mdf_buy.index, 
+                                    name="B",
+                                    y=mdf_buy, 
+                                    marker_color= 'yellow',
+                                    mode="markers"),
+                                    row = irow, 
+                                    col = icol   
+                        )
+            # sell-rate by auto-trade 
+            if sell_count > 0:
+                # resample and convert to min rate-value
+                mdf_sell = df_sell['rate'].resample('H').min()
+                if auto_last > 0:
+                    mdf_sell = mdf_sell.tail(auto_last)
+                fig = fig.add_trace( go.Scatter(x=mdf_sell.index, 
+                                    name="S",
+                                    y=mdf_sell, 
+                                    marker_color= 'cyan',
+                                    mode="markers"),
+                                    row = irow, 
+                                    col = icol   
+                        )
+        #
         if macd_flg == True:
             #macd
             fig = fig.add_trace( go.Scatter(x=mdfil.index, 
