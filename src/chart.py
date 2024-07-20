@@ -10,7 +10,7 @@ import os
 from env import *
 from myApi import *
 from mysqlite3.mysqlite3 import MyDb
-#import pandas
+import pandas as pd
 import plotly.graph_objects as go
 import plotly.figure_factory as ff
 from plotly.subplots import make_subplots
@@ -22,7 +22,7 @@ from plotly.subplots import make_subplots
 print(os.getcwd())
 # print command line(arguments)
 #
-# chart.py {symbol1 [symbol2]|*} [display-days] [-past-days] [-m(asd)] [-a(uto)] [-d(ebug)]
+# chart.py {symbol1 [symbol2]|*} [display-days] [-past-days] [-m(acd)] [-a(uto)] [-d(ebug)] [-b(ottom)]
 #
 args = sys.argv
 cmdline = ""
@@ -34,6 +34,7 @@ db = MyDb(DB_PATH)
 print('<< chart start >>')
 print(cmdline)
 #
+verbose = False         # debug write
 macd_flg = False        # not display MACD
 auto_flg = False        # auto-trade point
 last = (24*7*1)         # 24h*week-days*week(default is 1-week)
@@ -48,29 +49,34 @@ nums = [int(num) for num in args if num.isnumeric()]
 if len(nums) > 0:       # display days
     last = 24*nums[0]   #24h*days
 #
-a_opt = [opt for opt in args if opt.startswith('-a')]
-if len(a_opt):
-    auto_flg = True
-    auto_last = 0
-    #print(f"a_opt:{a_opt[0]}" )
-    if len(a_opt[0]) > 2 and a_opt[0][2:].isnumeric():
-        auto_last = 24*int(a_opt[0][2:])
 #
 opts = [opt for opt in args if opt.startswith('-')]
 if '-m' in opts and selnum == 1:    #MASD
     macd_flg = True
 #
-#
-if '-d' in opts:                    #debug write
-    print(selsyms)
-    print(nums)
-    print(opts)
+autopt = [opt for opt in opts if opt.startswith('-a')]
+if len(autopt) > 0:
+    auto_flg = True
+    auto_last = last
+    if autopt[0][2:].isnumeric():
+        auto_last = 24*int(autopt[0][2:])
 #
 optnums = [int(num[1:]) for num in opts if num[1:].isnumeric()]
 if len(optnums) > 0:    # past days
     mlast = 24*optnums[0]
 else:
     mlast = last
+#
+if '-b' in opts:        #yanchor
+    legend_dict = dict(x=0.01,y=0.01,xanchor='left',yanchor='bottom',orientation='h')
+else:
+    legend_dict = dict(x=0.01,y=0.99,xanchor='left',yanchor='top',orientation='h')
+#
+if '-d' in opts:        #debug write
+    print(selsyms)
+    print(nums)
+    print(opts)
+    verbose = True
 #
 # define sub-plots block
 #
@@ -103,15 +109,14 @@ for sym in coin_symbols:
             irow = icount
             icol = 1
         #print(f"symbol:{sym}")
-        print(f"{sym}:{target_rate[sym]}")
-        params = {"sym":sym,"limit":limit}
         #
         # read rate-data from db to pandas
+        #
+        print(f"{sym}:{target_rate[sym]}")
+        params = {"sym":sym,"limit":limit}
         df = db.pandas_read_ratelogs(params)
         #print(df.index)
         #print(df.count())
-        #print(df)
-
         # convert to OHLC
         mdf = df['rate'].resample('H').ohlc()
         mdf.columns = ['Open', 'High', 'Low', 'Close']
@@ -125,7 +130,7 @@ for sym in coin_symbols:
         # SMA
         mdfil["sma5"] = mdfil["Close"].rolling(window=5).mean()
         mdfil["sma25"] = mdfil["Close"].rolling(window=25).mean()
-        # mdfil["sma75"] = mdfil["Close"].rolling(window=75).mean()
+        #mdfil["sma75"] = mdfil["Close"].rolling(window=75).mean()
         # STD
         mdfil["std"] = mdfil["Close"].rolling(window=25).std(ddof=1)
         # EMA
@@ -136,13 +141,54 @@ for sym in coin_symbols:
         mdfil["signal"] = mdfil["macd"].ewm(span=9,adjust=False).mean()
 #        mdfil["signal"] = mdfil["macd"].rolling(window=9).mean()
         #
+        # select diaplay datas
+        #
         mdf = mdf.tail(mlast)
         mdfil = mdfil.tail(mlast)
         if mlast > last:
             mdf = mdf.head(last)
             mdfil = mdfil.head(last)
         #
-        #OHLC
+        # create auto-trade rate-data
+        #
+        if auto_flg:
+            df_tail = df.tail(1)        # get a record on last index 
+            df_tail.iat[0,3] = None     # set rate's value to NaN
+            if verbose:
+                print(df_tail)
+            # read auto-buy-trade-rate-data from db to pandas
+            sym_side = sym + '_buy'
+            params = {"sym":sym_side,"limit":limit}
+            df_buy = db.pandas_read_ratelogs(params)
+            buy_count =df_buy['rate'].count()
+            print(f"buy_count : {buy_count}")
+            if buy_count > 0:
+                # append the last record in sampling rate's records
+                df_buy = pd.concat([df_buy, df_tail])
+                # resample and convert to the first rate-value
+                mdf_buy = df_buy['rate'].resample('H').first()
+                # select diaplay datas
+                mdf_buy = mdf_buy.tail(auto_last)
+                if verbose:
+                    print(mdf_buy)
+            #
+            # read auto-sellbuy-trade-rate-data from db to pandas
+            sym_side = sym + '_sell'
+            params = {"sym":sym_side,"limit":limit}
+            df_sell = db.pandas_read_ratelogs(params)
+            sell_count =df_sell['rate'].count()
+            print(f"sell_count: {sell_count}")
+            if sell_count > 0:
+                # append the last record in sampling rate's records
+                df_sell = pd.concat([df_sell, df_tail])
+                # resample and convert to the first rate-value
+                mdf_sell = df_sell['rate'].resample('H').first()
+                # select diaplay datas
+                mdf_sell = mdf_sell.tail(auto_last)
+                if verbose:
+                    print(mdf_sell)
+        #
+        # < OHLC >
         fig = fig.add_trace( go.Candlestick(x=mdf.index,
                                         name="ohlc",
                                         open=mdf["Open"],
@@ -152,7 +198,7 @@ for sym in coin_symbols:
                             row = irow, 
                             col = icol  
                         )
-        #SMA5
+        # < SMA5 >
         fig = fig.add_trace( go.Scatter(x=mdfil.index, 
                                     name="sma5",
                                     y=mdfil["sma5"], 
@@ -160,7 +206,7 @@ for sym in coin_symbols:
                             row = irow, 
                             col = icol   
                         )
-        #SMA25
+        # < SMA25 >
         fig = fig.add_trace( go.Scatter(x=mdfil.index, 
                                     name="sma25",
                                     y=mdfil["sma25"], 
@@ -168,7 +214,7 @@ for sym in coin_symbols:
                             row = irow, 
                             col = icol   
                         )
-        #SMA75
+        # < SMA75 >
         '''
         fig = fig.add_trace( go.Scatter(x=mdfil.index, 
                                     name="sma75",
@@ -179,7 +225,7 @@ for sym in coin_symbols:
                             col = icol   
                         )
         '''
-        #upper band
+        # < upper band >
         fig = fig.add_trace( go.Scatter(x=mdfil.index, 
                                     name="upper",
                                     y=mdfil["sma25"] + mdfil['std']*2, 
@@ -190,7 +236,7 @@ for sym in coin_symbols:
                             row = irow, 
                             col = icol   
                         )
-        #lower band
+        # < lower band >
         fig = fig.add_trace( go.Scatter(x=mdfil.index, 
                                     name="lower",
                                     y=mdfil["sma25"] - mdfil['std']*2, 
@@ -202,7 +248,8 @@ for sym in coin_symbols:
                             row = irow, 
                             col = icol   
                         )
-        #sig+1 band
+
+        # < sig+1 band >
         fig = fig.add_trace( go.Scatter(x=mdfil.index, 
                                     name="sig+1",
                                     y=mdfil["sma25"] + mdfil['std']*1, 
@@ -212,7 +259,7 @@ for sym in coin_symbols:
                             row = irow, 
                             col = icol   
                         )
-        #sig-1 band
+        # < sig-1 band >
         fig = fig.add_trace( go.Scatter(x=mdfil.index, 
                                     name="sig-1",
                                     y=mdfil["sma25"] - mdfil['std']*1, 
@@ -222,7 +269,7 @@ for sym in coin_symbols:
                             row = irow, 
                             col = icol   
                         )
-        #target rate
+        # < target rate >
         if target_rate.get(sym) != None:
             i = 1
             for rate in target_rate[sym]:
@@ -247,30 +294,9 @@ for sym in coin_symbols:
                             row = irow, 
                             col = icol   
                         )
-
-        if auto_flg:
-            #
-            # read auto-trade-rate-data from db to pandas
-            #
-            sym_side = sym + '_buy'
-            params = {"sym":sym_side,"limit":limit}
-            df_buy = db.pandas_read_ratelogs(params)
-            buy_count =df_buy['rate'].count()
-            print(f"buy_count : {buy_count}")
-
-            sym_side = sym + '_sell'
-            params = {"sym":sym_side,"limit":limit}
-            df_sell = db.pandas_read_ratelogs(params)
-            sell_count =df_sell['rate'].count()
-            print(f"sell_count: {sell_count}")
-
-            # buy-rate by auto-trade
-            if buy_count > 0:
-                # resample and convert to max rate-value
-                mdf_buy = df_buy['rate'].resample('H').max()
-                if auto_last > 0:
-                    mdf_buy = mdf_buy.tail(auto_last)
-                fig = fig.add_trace( go.Scatter(x=mdf_buy.index, 
+        # < Auto-trade Buy-rate > 
+        if auto_flg and buy_count > 0:
+            fig = fig.add_trace( go.Scatter(x=mdf_buy.index, 
                                     name="B",
                                     y=mdf_buy, 
                                     marker_color= 'yellow',
@@ -278,13 +304,9 @@ for sym in coin_symbols:
                                     row = irow, 
                                     col = icol   
                         )
-            # sell-rate by auto-trade 
-            if sell_count > 0:
-                # resample and convert to min rate-value
-                mdf_sell = df_sell['rate'].resample('H').min()
-                if auto_last > 0:
-                    mdf_sell = mdf_sell.tail(auto_last)
-                fig = fig.add_trace( go.Scatter(x=mdf_sell.index, 
+        # < Auto-trade Sell-rate > 
+        if auto_flg and sell_count > 0:
+            fig = fig.add_trace( go.Scatter(x=mdf_sell.index, 
                                     name="S",
                                     y=mdf_sell, 
                                     marker_color= 'cyan',
@@ -292,7 +314,10 @@ for sym in coin_symbols:
                                     row = irow, 
                                     col = icol   
                         )
-        #
+            #print(mdfil.index)
+            #print(mdf_buy.index)
+            
+        # < MACD >
         if macd_flg == True:
             #macd
             fig = fig.add_trace( go.Scatter(x=mdfil.index, 
@@ -324,7 +349,9 @@ for sym in coin_symbols:
         #next symbol
         icount += 1
 #
+#
 fig.update_layout(
+    #autosize = False,
     title = {
         "text": "CoineCheck - Candle-Chart",
         "y": 0.9,
@@ -332,8 +359,7 @@ fig.update_layout(
     },
     #yaxis_title = 'Rate',
     #xaxis_title = "Hour",
-    legend = dict(x=0.01,y=0.99,xanchor='left',yanchor='top',orientation='h'),
-    #legend=dict(x=0.5,y=0.99,xanchor='center',yanchor='top',orientation='h'),
+    legend = legend_dict,
  )
 fig.update_traces(dict(showlegend = False), selector = dict(type='candlestick'))
 
@@ -362,6 +388,7 @@ else:
         #fig.update_traces(width=10.0, selector = dict(type='bar'))
         #fig.update_traces(dict(showlegend = False), selector = dict(type='bar'))
         fig.update_layout(
+            #xaxis_rangeslider = dict(visible=True),
             yaxis_title = 'Rate', yaxis2_title = 'EMA', 
             xaxis2_title = "Hour",
             showlegend = True
