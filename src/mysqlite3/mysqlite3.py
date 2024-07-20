@@ -5,11 +5,12 @@
 import sqlite3
 import pandas
 import time
-from datetime import datetime
+import myApi as my
 from env import *
-from myApi import *
+from datetime import datetime
 #
-# Private API Class for sqlite3
+# Private API Class for sqlite3from env import *
+
 #
 class MyDb:
     def __init__(self, dbpath='../Auto-trade.db'):
@@ -60,6 +61,7 @@ class MyDb:
 #
     def get_balanceAmount(self, exchange, symbol):
         amount = None
+        symbol = symbol.lower()
         sql = "select * from balance where "\
             + f"exchange='{exchange}' and symbol='{symbol}'"
 
@@ -76,13 +78,15 @@ class MyDb:
         c_amount = self.get_balanceAmount(exchange, symbol)
         if c_amount != None:
             if trade == 'SELL':
-                c_cmount -= amount
+                c_amount -= amount
             else:     # 'BUY'
-                c_cmount += amount
-            sql = "update balance set amount = {c_amount} where "\
+                c_amount += amount
+            sql = f"update balance set amount = {c_amount} where "\
                 + f"exchange='{exchange}' and symbol='{symbol}'"
+
+            print(f">adjust_balance:sql={sql}")
             self.cur.execute(sql)
-            self.conn.commit()
+            self.conn.commit()            
         return c_amount
 #
 # insert samplling rates logs.
@@ -317,6 +321,91 @@ class MyDb:
             self.cur.execute(sql)
         return [rs['rate'],rs['time_epoch']]
 #
+#  トリガー指定のレートを超えているか判定して、countの初期設定を行う
+#      
+    def init_triggerCount(self, trade, symbol, c_rate):
+        print(f"init_triggerCount( {trade.upper()}, {symbol.upper()}, {c_rate:13.3f} )")
+        ret = False
+        sql = "select * from trigger where "\
+            + f"trade='{trade}' and symbol='{symbol}' and "\
+            + f"count=0"
+        rs = self.cur.execute(sql).fetchone()
+        #
+        # store selected records to temporary array.
+        #  
+        rsAry = []
+        while rs != None:
+            rsAry.append( {'seqnum':rs['seqnum'],\
+                           'exchange':rs['exchange'],\
+                           'method':rs['method'],\
+                           'rate':rs['rate'] } )
+            # read next record
+            rs = self.cur.fetchone()
+
+        # 統計値の取得
+        signe = self.get_macd_signe(symbol)
+
+        for rs in rsAry:
+            exchange = rs['exchange']
+            method = rs['method'].upper()
+            b_rate = rs['rate']
+            m_rate = None
+            if b_rate < 0.0:
+                if trade == 'sell':
+                    # 直近の買いレート
+                    m_rate = self.get_maxOrderBuyRate(exchange, symbol)
+                    if m_rate == None:
+                        b_rate = 0
+                    else:
+                        b_rate = m_rate*(1.0 + abs(b_rate))
+                else:
+                    # 直近の売りレート
+                    m_rate = self.get_minOrderSellRate(exchange, symbol)
+                    if m_rate == None:
+                        b_rate = 0
+                    else:
+                        b_rate = m_rate*(1.0 - abs(b_rate))
+            #
+            update_flg = False
+            if method == 'IM':
+                t_rate = b_rate
+                if trade == 'sell' and t_rate > 0.0 and c_rate >= t_rate:
+                    update_flg = True
+                if trade == 'buy' and t_rate > 0.0 and c_rate <= t_rate:
+                    update_flg = True
+            elif 'SIG' in method:
+                # 目標レートの設定
+                if trade == 'sell':
+                    t_rate = self.get_targetRate('sell', method, signe['upper'], signe['std'])
+                    if b_rate != 0 and b_rate > t_rate:
+                        t_rate = b_rate
+                    if t_rate > 0.0 and c_rate >= t_rate:
+                        update_flg = True
+                else:
+                    t_rate = self.get_targetRate('buy', method, signe['lower'], signe['std'])
+                    if b_rate != 0 and b_rate < t_rate:
+                        t_rate = b_rate
+                    if t_rate > 0.0 and c_rate <= t_rate:
+                        update_flg = True
+            #
+            seqnum = rs['seqnum']
+            print(f"{method:10}({seqnum}):{update_flg}:rate={rs['rate']},"\
+                  +  f"b_rate={b_rate:13.3f}, t_rate={t_rate:13.3f}, m_rate={m_rate}")
+            if update_flg == True:
+                # update count 
+                count = 1
+                timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                sql = f"update trigger set count={count},updated_at='{timestamp}'"\
+                    + f" where seqnum={seqnum}"
+                self.cur.execute(sql)
+                print(f"Trigger({seqnum}) count initialized to 1.")
+                ret = True
+        #
+        if ret == True:
+            self.conn.commit()
+            #print(f"Trinit_triggerCount:committed.")
+        return ret
+#
 #  トリガー指定のレートを横断したか判定する
 #      
     def check_tradeRate(self, trade, symbol, c_rate, l_rate):
@@ -351,7 +440,7 @@ class MyDb:
 #
     def get_targetRate(self, trade, method, towsig, std):
         t_rate = towsig        # +2σ
-        if len(method) > len('xxSIG') and is_float(method[5:]):
+        if len(method) > len('xxSIG') and my.is_float(method[5:]):
             sig = 2.0 - float(method[5:])
             #print(f">get_targetRate:sig={sig:5.3f}")
             if trade == 'sell':  
@@ -401,13 +490,13 @@ class MyDb:
             method = rs['method'].upper()           # 自動取引シナリオ
             #print(f"sell:{t_rate}:{method}:{l_rate} -> {c_rate}")
             exchange = rs['exchange']               # 取引所
-            if b_rate <= 0.0:
+            if b_rate < 0.0:
                 # 直近の買いレート
                 max_rate = self.get_maxOrderBuyRate(exchange, symbol)
                 #print(f"max_rate:{max_rate}")
             #
             if 'IM' in method:              # 指値
-                if b_rate <= 0.0:
+                if b_rate < 0.0:
                     # 直近の買いレートの割り増し
                     if max_rate != None:
                         t_rate = max_rate*(1.0 + abs(b_rate))
@@ -439,7 +528,7 @@ class MyDb:
                     if b_rate > t_rate:
                         t_rate = b_rate
                 else:
-                    if b_rate <= 0.0:                     
+                    if b_rate < 0.0:                     
                         # 直近の買いレートの割り増し
                         if max_rate != None:
                             b_rate = max_rate*(1.0 + abs(b_rate))
@@ -538,13 +627,13 @@ class MyDb:
             method = rs['method'].upper()
             #print(f"buy :{t_rate}:{method}:{l_rate} -> {c_rate}")
             exchange = rs['exchange']
-            if b_rate <= 0.0:                     
+            if b_rate < 0.0:                     
                 # 直近の売りレート
                 min_rate = self.get_minOrderSellRate(exchange, symbol)
                 #print(f"min_rate:{min_rate}")
             #
             if 'IM' in method:          # 指値
-                if b_rate <= 0.0:                     
+                if b_rate < 0.0:                     
                     # 直近の売りレートから割引
                     if min_rate != None:
                         t_rate = min_rate*(1.0 - abs(b_rate))
@@ -575,7 +664,7 @@ class MyDb:
                     if (b_rate < t_rate) and b_rate != 0.0:
                         t_rate = b_rate
                 else:
-                    if b_rate <= 0.0:                     
+                    if b_rate < 0.0:                     
                         # 直近の売りレートから割引
                         if min_rate != None:
                             b_rate = min_rate*(1.0 - abs(b_rate))
@@ -700,11 +789,11 @@ class MyDb:
 #
     def print_signal(self, signe, hist):
         if ( abs(signe['histgram'])) < abs(hist):
-            print_text = colored_16(STYLE_NON,FG_GREEN,BG_BLACK,f"   >hist={signe['histgram']:12.3f},")
-            print_text += colored_reset()
+            print_text = my.colored_16(STYLE_NON,FG_GREEN,BG_BLACK,f"   >hist={signe['histgram']:12.3f},")
+            print_text += my.colored_reset()
         elif signe['histgram'] < 0.0:
-            print_text = colored_16(STYLE_NON,FG_RED,BG_BLACK,f"   >hist={signe['histgram']:12.3f},")
-            print_text += colored_reset()
+            print_text = my.colored_16(STYLE_NON,FG_RED,BG_BLACK,f"   >hist={signe['histgram']:12.3f},")
+            print_text += my.colored_reset()
         else:
             print_text = f"   >hist={signe['histgram']:12.3f},"
 
@@ -720,13 +809,13 @@ class MyDb:
         if cont == 0:
             cont_text = f"  cont={cont}"
         elif cont == 5:
-            cont_text = colored_16(STYLE_NON,FG_RED,BG_BLACK,f"  cont={cont}")
+            cont_text = my.colored_16(STYLE_NON,FG_RED,BG_BLACK,f"  cont={cont}")
         elif cont == 4:
-            cont_text = colored_16(STYLE_BLINK,FG_RED,BG_BLACK,f"  cont={cont}")
+            cont_text = my.colored_16(STYLE_BLINK,FG_RED,BG_BLACK,f"  cont={cont}")
         elif cont == 1:
-            cont_text = colored_16(STYLE_NON,FG_YELLOW,BG_BLACK,f"  cont={cont}")
+            cont_text = my.colored_16(STYLE_NON,FG_YELLOW,BG_BLACK,f"  cont={cont}")
         else:
-            cont_text = colored_16(STYLE_NON,FG_GREEN,BG_BLACK,f"  cont={cont}")
+            cont_text = my.colored_16(STYLE_NON,FG_GREEN,BG_BLACK,f"  cont={cont}")
         return cont_text
     #
 #
@@ -740,15 +829,16 @@ class MyDb:
             rslt = True
         #
         if a_count == 1:
-            print_text = colored_16(STYLE_NON,FG_YELLOW,BG_BLACK,f"")
+            print_text = my.colored_16(STYLE_NON,FG_YELLOW,BG_BLACK,f"")
         elif a_count == 2:
-            print_text = colored_16(STYLE_NON,FG_GREEN,BG_BLACK,f"")
+            print_text = my.colored_16(STYLE_NON,FG_GREEN,BG_BLACK,f"")
         elif a_count == 0 and b_count == 1:
-            print_text = colored_16(STYLE_NON,FG_BLUE,BG_BLACK,f"")
+            print_text = my.colored_16(STYLE_NON,FG_BLUE,BG_BLACK,f"")
         #
+        trade = trade.upper()
         print_text += f"   >{trade}({sym}):{rslt}:{b_count}->{a_count}:"\
-                    + f"seq={seq}:{method}({b_rate:,.3f}):t_rate={t_rate:13,.3f}:"
-        print(print_text + self.edit_cont_text(cont) + colored_reset())
+                    + f"seq={seq}:{method:<10}({b_rate:,.3f}):t_rate={t_rate:13,.3f}:"
+        print(print_text + self.edit_cont_text(cont) + my.colored_reset())
         return
 
 #eof

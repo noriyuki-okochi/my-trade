@@ -54,9 +54,11 @@ def colored_reset():
 #
 # return formated time-stamp
 #
-def time_stamp():
+def time_stampA():
     return datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-
+#
+def time_stamp(fmt):
+    return datetime.now().strftime(fmt)
 #
 # return the datetime the specified term ago.
 #

@@ -22,6 +22,7 @@ from gmocoin.gmocoin import GmoCoin
 from mysqlite3.mysqlite3 import MyDb
 
 #print(http.__file__)
+#print(sys.path)
 #
 # start of main
 #
@@ -126,16 +127,18 @@ if len(opts) > 1 and opts[1] == '-h':
     print(" -bENEFIT (gmo|coin) <symbol> [<from-date>]:[<to-date>]")
     print(" -uPDATE (trigger|orders) <key-val> <item> [<value>]")
     print(" -dELETE([0-9]+)[y|m|d]")
-    print(" -Header [-t]")
+    print(" -Header [-tRIGGER-REG] [-iNIT-COUNT]")
     print(" -sKIPUpdateTrigger")
     exit()
 #
 dontSampling = False
 updateTrigger = 3
+initTriggerCount = 0
+#
 if len(opts) == 2 and opts[1] == '-s':
     # 自動取引トリガーの更新をスキップする
     updateTrigger = 0
-
+#
 if len(opts) > 1 and opts[1] == '-H':
     # ヘッダ部の表示のみで終了する
     dontSampling = True
@@ -148,110 +151,9 @@ if len(opts) > 1 and opts[1] == '-H':
             updateTrigger = 1
         if opts[2] == '-ts':
             updateTrigger = 2
-
+    if '-i' in opts:
+        initTriggerCount = 1
 #
-# 現物取引の注文（成行）実行
-#    -t (gmo|coin) <symbol> (buy|sell) <size> [<rate>]
-#       <symbol>  :: {bit|eth}
-#       <size>    :: 9.99999
-# 現物取引の注文ログ登録
-#    -tl (gmo|coin) <symbol> (buy|sell) <rate>
-#       <timestamp>:: Y-m-d H:M:S
-##
-if len(opts) >= 6 and (opts[1] == '-t' or opts[1] == '-tl'):
-    exchange = opts[2]
-    symbol = opts[3]
-    side = opts[4]
-    if opts[1] == '-tl':
-        option = 'l'   
-        rate = opts[5]
-    else:        
-        option = 't'
-        size = opts[5]
-    if exchange in ['coin','gmo']:
-        if exchange == 'coin':
-            exchange = EXCHANGE_CHECK
-        else:
-            exchange = EXCHANGE_GMO
-        if not symbol in auto_coins:
-            illegal = symbol
-            exchange = None 
-        if not side in ['buy', 'sell']:
-            illegal = side
-            exchange = None 
-        if option == 't' and (not is_float(size)):
-            illegal = size
-            exchange = None
-        #
-        if option == 't':
-            rate = 0.0
-            if len(opts) > 6:
-                rate = opts[6]
-                if not is_float(rate):
-                    illegal = rate
-                    exchange = None
-        else:
-            print(f">Input timeStamp[YYYY-mm-dd HH:MM:SS'].")
-            timestamp = input('>>')
-            try:
-                d = datetime.strptime(timestamp, '%Y-%m-%d %H:%M:%S')
-            except ValueError:
-                illegal = timestamp
-                exchange = None
-            if not is_float(rate):
-                illegal = rate
-                exchange = None
-    else:
-        illegal = exchange
-        exchange = None
-    #   
-    if exchange != None: 
-        if option == 't':
-            amount = float(size)
-            #print(f">request {side}-order of {symbol}({size:8,.3f}) to {exchange}....")
-            print(f">Are you sure?[y/n].")
-            ans = input('>>')
-            if ans == 'y':
-                id = exec_trade(exchange, symbol, side, 'MARKET', rate, amount)
-                print(f">ID={id}")
-                if id != None:
-                    # insert to DB(ratelogs)
-                    db.insert_ratelogs(exchange, symbol+'_'+side, rate)
-        else:
-            # insert to DB(ratelogs)
-            db.insert_ratelogs(exchange, symbol+'_'+side, rate, timestamp)
-    else:
-        if option == 't':
-            print(f">illegal argument[{illegal}]!!:  -t (gmo|coin) (btc|eth) (buy|sell) <size> ")
-        else:
-            print(f">illegal argument[{illegal}]!!:  -tl (gmo|coin) (btc|eth) (buy|sell) <rate> ")
-    exit()
-#
-# 現物取引の注文（成行）取り消し
-#    -c  (gmo|coin) <id>
-#       <id>:: order-id
-#
-if len(opts) == 4 and opts[1] == '-c':
-    exchange = opts[2]
-    id = opts[3]
-    if exchange in ['coin','gmo']:
-        if exchange == 'coin':
-            obj = coincheck
-        else:
-            obj = gmocoin
-        #
-        if id.isdigit():
-            print(f">Are you sure?[y/n].")
-            ans = input('>')
-            if ans == 'y':
-                ret = obj.cancelOrders(id)
-                print(f">ret={ret}")
-        else:
-            print(f">illegal argument[{id}]!!:  -c (gmo|coin) <id>")
-    else:
-        print(f">illegal argument[{exchange}]!!:  -c (gmo|coin) <id>")
-    #
-    exit()
 #
 # 利益集計
 #    -b (gmo|coin) <symbol> <period>
@@ -351,13 +253,147 @@ if len(opts) > 0:
     db.close()
     exit() 
 #
-print('<< Auto-trade start >>')
+# coincheck 現在レート取得
+#
+URL = 'https://coincheck.com/api/rate/'
+coins = ['btc_jpy','eth_jpy','iost_jpy','matic_jpy']
+conversionRate=[]
+conversionRate.append(float(1))
+for coin in coins:
+    req = http.Request(URL+coin, method='GET')
+    res = http.urlopen(req)
+    if res.status == 200:
+        body = res.read()
+        result = json.loads(body.decode())
+        conversionRate.append(float(result['rate']))
+        res.close()
+    else:
+        print(f"{coin:4}:error!![status = {result['status']}]")
+#print(conversionRate)
 
+#
+# 現物取引の注文（成行）実行
+#    -t (gmo|coin) <symbol> (buy|sell) <size> [<rate>]
+#       <symbol>  :: {bit|eth}
+#       <size>    :: 9.99999
+# 現物取引の注文ログ登録
+#    -tl (gmo|coin) <symbol> (buy|sell) <rate>
+#       <timestamp>:: Y-m-d H:M:S
+##
+if len(opts) >= 6 and (opts[1] == '-t' or opts[1] == '-tl'):
+    exchange = opts[2]
+    symbol = opts[3]
+    side = opts[4]
+    if opts[1] == '-tl':
+        option = 'l'   
+        rate = opts[5]
+    else:        
+        option = 't'
+        size = opts[5]
+    if exchange in ['coin','gmo']:
+        if exchange == 'coin':
+            exchange = EXCHANGE_CHECK
+        else:
+            exchange = EXCHANGE_GMO
+        if not symbol in auto_coins:
+            illegal = symbol
+            exchange = None 
+        if not side in ['buy', 'sell']:
+            illegal = side
+            exchange = None 
+        if option == 't' and (not is_float(size)):
+            illegal = size
+            exchange = None
+        #
+        if option == 't':
+            rate = None
+            if len(opts) > 6:
+                rate = opts[6]
+                if not is_float(rate):
+                    illegal = rate
+                    exchange = None
+        else:
+            print(f">Input timeStamp[YYYY-mm-dd HH:MM:SS'].")
+            timestamp = input('>>')
+            try:
+                d = datetime.strptime(timestamp, '%Y-%m-%d %H:%M:%S')
+            except ValueError:
+                illegal = timestamp
+                exchange = None
+            if not is_float(rate):
+                illegal = rate
+                exchange = None
+    else:
+        illegal = exchange
+        exchange = None
+    #   
+    if exchange != None: 
+        if option == 't':
+            if rate == None:
+                idx = 0
+                for sym in coins:
+                    if symbol == sym[:len(symbol)]:
+                        rate = conversionRate[idx+1]
+                        break
+                    idx += 1
+            #
+            amount = float(size)
+            #print(f">request {side}-order of {symbol}({size:8,.3f}) to {exchange}....")
+            print(f"rate = {rate}")
+            print(f">Are you sure?[y/n].")
+            ans = input('>>')
+            if ans == 'y':
+                id = exec_trade(exchange, symbol, side, 'MARKET', rate, amount)
+                print(f">ID={id}")
+                if id != None:
+                    # insert to DB(ratelogs)
+                    db.insert_ratelogs(exchange, symbol+'_'+side, rate)
+        else:
+            # insert to DB(ratelogs)
+            db.insert_ratelogs(exchange, symbol+'_'+side, rate, timestamp)
+    else:
+        if option == 't':
+            print(f">illegal argument[{illegal}]!!:  -t (gmo|coin) (btc|eth) (buy|sell) <size> ")
+        else:
+            print(f">illegal argument[{illegal}]!!:  -tl (gmo|coin) (btc|eth) (buy|sell) <rate> ")
+    exit()
+#
+# 現物取引の注文（成行）取り消し
+#    -c  (gmo|coin) <id>
+#       <id>:: order-id
+#
+if len(opts) == 4 and opts[1] == '-c':
+    exchange = opts[2]
+    id = opts[3]
+    if exchange in ['coin','gmo']:
+        if exchange == 'coin':
+            obj = coincheck
+        else:
+            obj = gmocoin
+        #
+        if id.isdigit():
+            print(f">Are you sure?[y/n].")
+            ans = input('>')
+            if ans == 'y':
+                ret = obj.cancelOrders(id)
+                print(f">ret={ret}")
+        else:
+            print(f">illegal argument[{id}]!!:  -c (gmo|coin) <id>")
+    else:
+        print(f">illegal argument[{exchange}]!!:  -c (gmo|coin) <id>")
+    #
+    exit()
+#
+##########################################################################
+#
+print('<< Auto-trade start >>')
+#
+#  delete rate-logs.
+#
 if delval != None:
     last_datetime = last_datetime(delval, delopt) 
     db.delete_ratelogs(last_datetime)
     print(f"the rate-logs before {last_datetime} have deleted now.")
-
 #
 # 自動取引のトリガー（レート値）登録
 #
@@ -377,27 +413,21 @@ if updateTrigger != 0:
     print(f"< hist_continuing >  = {hist_continuing}")
     print(f"< order_amount_jpy > = {order_amount_jpy}")
 #
+# 起動時のレートがトリガー指定レートを超えているときcountを１に初期化する
+#
+if initTriggerCount == 1:
+    idx = 0     # 先頭はJPY
+    for rate in conversionRate:
+        if idx > 0 and idx < 5:
+            sym = coins[idx-1]
+            u = sym.index('_')
+            db.init_triggerCount(TRADE_SELL, sym[:u], rate)
+            db.init_triggerCount(TRADE_BUY, sym[:u], rate)
+        idx = idx + 1
+#
 # 現在資産残高表示
 #
 print('\n<< balance >>')
-#
-# coincheck 現在レート取得
-#
-URL = 'https://coincheck.com/api/rate/'
-coins = ['btc_jpy','eth_jpy','iost_jpy','matic_jpy']
-conversionRate=[]
-conversionRate.append(float(1))
-for coin in coins:
-    req = http.Request(URL+coin, method='GET')
-    res = http.urlopen(req)
-    if res.status == 200:
-        body = res.read()
-        result = json.loads(body.decode())
-        conversionRate.append(float(result['rate']))
-        res.close()
-    else:
-        print(f"{coin:4}:error!![status = {result['status']}]")
-#print(conversionRate)
 #
 # coincheck 残高
 #
@@ -564,9 +594,9 @@ symbols = {\
 header =''
 for key, item in symbols.items():
     symbol = '--' + key + '--'
-    header = header + f"{symbol:^22}"
+    header = header + f"{symbol:^24}"
 
-print(header+f"({time_stamp():^22})")
+print(header+f"({time_stamp('%Y-%m-%d %H:%M:%S'):^22})")
 #
 #signal function
 #
@@ -589,7 +619,7 @@ def ticker(arg1, arg2):
     try:
         # display header    
         if counter == 0:
-            print(header+f"({time_stamp():^24})")
+            print(header+f"({time_stamp('%Y-%m-%d %H:%M:%S'):^22})")
             counter = MAX_LINES
             #print(ud_cont)
         #
@@ -605,7 +635,7 @@ def ticker(arg1, arg2):
                 result = json.loads(body.decode())
                 rate = float(result['rate'])
                 sym = key.lower()
-                rateString = rateString + f"{rate:> 13,.3f}"
+                rateString = rateString + f"{rate:>15,.3f}"
                 title = None
                 if ud_rate[i] == 0.0:
                     ud_rate[i] = rate
@@ -775,7 +805,7 @@ def ticker(arg1, arg2):
         #
         # display a line of rate
         #
-        print(rateString)
+        print(rateString + f"{time_stamp('             %H:%M:%S')}")
     except KeyboardInterrupt:
         db.close()
         exit(0)
