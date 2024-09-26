@@ -80,11 +80,11 @@ def get_amount(exchange, symbol, trade, rate):
 #
 # execute trade
 #
-def exec_trade(exchange, symbol, trade, type, rate, amount=None):
+def exec_trade(exchange, symbol, trade, extype, rate, amount=None):
     id = None
     if exchange == EXCHANGE_CHECK:
         tradeObj = coincheck
-        if symbol.upper() not in ['BTC','ETH']:
+        if symbol.upper() not in ['BTC','IOST']:
             id = 0
     elif exchange == EXCHANGE_GMO:
         tradeObj = gmocoin
@@ -96,23 +96,23 @@ def exec_trade(exchange, symbol, trade, type, rate, amount=None):
     if id == 0:
         return id       # this coin is not supported.
     #
-    print(f">exec_trade:rate={rate}, amount={amount}")
     #
     if amount == None or amount == 0.0:
         amount = get_amount(exchange, symbol, trade, rate)
         if amount == None or amount == 0.0:
+            print(f">exec_trade:amount={amount}")
             return 0
     
     order_jpy = int(amount * rate)
-    print(f">{symbol}:{trade} amount={amount:8,.3f}, rate={rate:13.3f}, order_jpy={order_jpy}")
+    print(f">exec_trade({symbol}):{trade} amount={amount:8,.3f}, rate={rate:13.3f}, order_jpy={order_jpy}")
 
-    id = tradeObj.execOrder(symbol, trade, type, rate, amount)
+    id = tradeObj.execOrder(symbol, trade, extype, rate, amount)
     if id != None:
         id = int(id)
         symbol = symbol.upper()
         rate = float(f"{rate:.3f}")
         amount = float(f"{amount:.4f}")
-        db.insert_orders(id, exchange, symbol, trade.upper(), type, rate, amount)
+        db.insert_orders(id, exchange, symbol, trade.upper(), extype, rate, amount)
         db.adjust_balance(exchange, symbol, trade.upper(), amount)
     return id
 #
@@ -121,17 +121,22 @@ def exec_trade(exchange, symbol, trade, type, rate, amount=None):
 opts = [opt for opt in args ]
 #
 if len(opts) > 1 and opts[1] == '-h':
+    print(" --- command ---")
+    print(" -hELP")
     print(" -tRADE (gmo|coin) <symbol> (buy|sell) <size> [<rate>]")
     print(" -tRADElOG (gmo|coin) <symbol> (buy|sell) <rate>")
     print(" -cANCLE (gmo|coin) <id>")
     print(" -bENEFIT (gmo|coin) <symbol> [<from-date>]:[<to-date>]")
     print(" -uPDATE (trigger|orders) <key-val> <item> [<value>]")
+    print(" -Header [-t|-tb|-ts] [-i] [-o]")
+    print("    -t|-tb|-ts::update trigger, -i::initialize trigger-count, -o::opens")
+    print(" --- option ---")
     print(" -dELETE([0-9]+)[y|m|d]")
-    print(" -Header [-tRIGGER-REG] [-iNIT-COUNT]")
     print(" -sKIPUpdateTrigger")
     exit()
 #
 dontSampling = False
+showOpens = False
 updateTrigger = 3
 initTriggerCount = 0
 #
@@ -153,41 +158,9 @@ if len(opts) > 1 and opts[1] == '-H':
             updateTrigger = 2
     if '-i' in opts:
         initTriggerCount = 1
+    if '-o' in opts:
+        showOpens = True
 #
-#
-# 利益集計
-#    -b (gmo|coin) <symbol> <period>
-#       <period>    :: [<from-date>]:[<to-date>]
-#       <date>      :: yyyy-mm-dd
-#
-if len(opts) > 1 and opts[1] == '-b':
-    if len(opts) >= 5:
-        value = None
-        exchange = opts[2]
-        symbol = opts[3]
-        period = opts[4]
-        if exchange in ['gmo','coin']:
-            if exchange == 'gmo':
-                exchange = 'gmocoin'
-            else:
-                exchange = 'coincheck'
-            #
-            if symbol in ['btc', 'BTC']:
-                if period.find(':') != -1:
-                    fdate = period[:period.find(':')]
-                    tdate = period[period.find(':')+1:]
-                    benefit = db.get_benefit(exchange, symbol, fdate, tdate)
-                    if benefit != None:
-                        print(f">{exchange}:{symbol}:Benefit = {benefit:,}")
-                else:
-                    print(f">illegal period[{period}]!!")
-            else:
-                print(f">illegal symbol[{symbol}]!!")
-        else:
-            print(f">illegal exchange[{exchange}]!!")
-    else:
-        print(f">arguments is insufficient.!!")
-    exit()
 #
 # テーブルの更新
 #    -u  (trigger|orders) <key-val> <item> [<value>]
@@ -210,7 +183,7 @@ if len(opts) >= 5 and opts[1] == '-u':
         item_ok = True
         if table == 'orders' and (not item in ['rate', 'amount']):
             item_ok = False
-        if table == 'trigger' and (not item in ['rate', 'method', 'amount', 'count']):
+        if table == 'trigger' and (not item in ['rate', 'method', 'amount', 'count', 'exectype']):
             item_ok = False
         #
         if keyVal.isdigit():
@@ -229,29 +202,6 @@ if len(opts) >= 5 and opts[1] == '-u':
         print(f">illegal table-name[{table}]!!")
     #
     exit()
-#
-# check option to delete rate-logs.
-#     -d([0-9]+)[y|m|d]
-#
-opts = [opt[2:] for opt in args if opt.startswith('-d')]
-if len(opts) > 0:
-    deloptstr = opts[0] 
-    if not deloptstr[-1] in ['d','m', 'y']:
-        deloptstr += 'y'
-    if deloptstr[:len(deloptstr)-1].isnumeric():
-        delval = int(deloptstr[:len(deloptstr)-1])
-        if delval != None:
-            print(f"log-delete option:{deloptstr}")
-            last_datetime = last_datetime(delval, deloptstr[-1]) 
-            print(f"The last-datetime is {last_datetime}. Are you sure?[y/n].")
-            ans = input('>')
-            if ans == 'y':
-                db.delete_ratelogs(last_datetime)
-    else:
-        print(f"log-delete option:illegal parameter.")
-        print("option: -d{9}...[y(default)|m|d]")
-    db.close()
-    exit() 
 #
 # coincheck 現在レート取得
 #
@@ -272,9 +222,51 @@ for coin in coins:
 #print(conversionRate)
 
 #
-# 現物取引の注文（成行）実行
+# 利益集計
+#    -b (gmo|coin) <symbol> <period>
+#       <period>    :: [<from-date>]:[<to-date>]
+#       <date>      :: yyyy-mm-dd
+#
+if len(opts) > 1 and opts[1] == '-b':
+    if len(opts) >= 5:
+        value = None
+        exchange = opts[2].lower()
+        symbol = opts[3].lower()
+        period = opts[4]
+        if exchange in ['gmo','coin']:
+            if exchange == 'gmo':
+                exchange = 'gmocoin'
+            else:
+                exchange = 'coincheck'
+            #
+            if symbol in ['btc', 'iost']:
+                idx = 1
+                crate = None
+                for sym in coins:
+                    if symbol in sym:
+                        crate = conversionRate[idx]
+                        print(f"crate={crate:.3f}")
+                        break
+                    idx += 1
+                if period.find(':') != -1:
+                    fdate = period[:period.find(':')]
+                    tdate = period[period.find(':')+1:]
+                    benefit = db.get_benefit(exchange, symbol, fdate, tdate, crate)
+                    if benefit != None:
+                        print(f">{exchange}:{symbol}:Benefit = {benefit:,}")
+                else:
+                    print(f">illegal period[{period}]!!")
+            else:
+                print(f">illegal symbol[{symbol}]!!")
+        else:
+            print(f">illegal exchange[{exchange}]!!")
+    else:
+        print(f">arguments is insufficient.!!")
+    exit()
+#
+# 現物取引の注文（成行）実行　（※）iostは指値
 #    -t (gmo|coin) <symbol> (buy|sell) <size> [<rate>]
-#       <symbol>  :: {bit|eth}
+#       <symbol>  :: {btc|eth|iost}
 #       <size>    :: 9.99999
 # 現物取引の注文ログ登録
 #    -tl (gmo|coin) <symbol> (buy|sell) <rate>
@@ -298,6 +290,10 @@ if len(opts) >= 6 and (opts[1] == '-t' or opts[1] == '-tl'):
         if not symbol in auto_coins:
             illegal = symbol
             exchange = None 
+        else:
+            extype = 'MARKET'
+            if symbol == 'iost':
+                extype = 'LIMIT'
         if not side in ['buy', 'sell']:
             illegal = side
             exchange = None 
@@ -312,6 +308,8 @@ if len(opts) >= 6 and (opts[1] == '-t' or opts[1] == '-tl'):
                 if not is_float(rate):
                     illegal = rate
                     exchange = None
+                else:
+                    rate = float(rate)
         else:
             print(f">Input timeStamp[YYYY-mm-dd HH:MM:SS'].")
             timestamp = input('>>')
@@ -343,7 +341,7 @@ if len(opts) >= 6 and (opts[1] == '-t' or opts[1] == '-tl'):
             print(f">Are you sure?[y/n].")
             ans = input('>>')
             if ans == 'y':
-                id = exec_trade(exchange, symbol, side, 'MARKET', rate, amount)
+                id = exec_trade(exchange, symbol, side, extype, rate, amount)
                 print(f">ID={id}")
                 if id != None:
                     # insert to DB(ratelogs)
@@ -353,9 +351,9 @@ if len(opts) >= 6 and (opts[1] == '-t' or opts[1] == '-tl'):
             db.insert_ratelogs(exchange, symbol+'_'+side, rate, timestamp)
     else:
         if option == 't':
-            print(f">illegal argument[{illegal}]!!:  -t (gmo|coin) (btc|eth) (buy|sell) <size> ")
+            print(f">illegal argument[{illegal}]!!:  -t (gmo|coin) (btc|eth|iost) (buy|sell) <size> [<rate>]")
         else:
-            print(f">illegal argument[{illegal}]!!:  -tl (gmo|coin) (btc|eth) (buy|sell) <rate> ")
+            print(f">illegal argument[{illegal}]!!:  -tl (gmo|coin) (btc|eth|iost) (buy|sell) <rate> ")
     exit()
 #
 # 現物取引の注文（成行）取り消し
@@ -384,6 +382,29 @@ if len(opts) == 4 and opts[1] == '-c':
     #
     exit()
 #
+##########################################################################
+# check option to delete rate-logs.
+#     -d([0-9]+)[y|m|d]
+#
+opts = [opt[2:] for opt in args if opt.startswith('-d')]
+if len(opts) > 0:
+    deloptstr = opts[0] 
+    if not deloptstr[-1] in ['d','m', 'y']:
+        deloptstr += 'y'
+    if deloptstr[:len(deloptstr)-1].isnumeric():
+        delval = int(deloptstr[:len(deloptstr)-1])
+        if delval != None:
+            print(f"log-delete option:{deloptstr}")
+            last_datetime = last_datetime(delval, deloptstr[-1]) 
+            print(f"The last-datetime is {last_datetime}. Are you sure?[y/n].")
+            ans = input('>')
+            if ans == 'y':
+                db.delete_ratelogs(last_datetime)
+    else:
+        print(f"log-delete option:illegal parameter.")
+        print("option: -d{9}...[y(default)|m|d]")
+    db.close()
+    exit() 
 ##########################################################################
 #
 print('<< Auto-trade start >>')
@@ -459,6 +480,38 @@ for key, item in result.items():
         if  order != None:
             outstring += f"  ({int(order['rate']*order['amount']):6,})"
         print(outstring)
+#
+# coincheck　未決済の注文
+#
+if showOpens == True:
+    path_orders_opens = '/api/exchange/orders/opens'
+    try:
+        result = coincheck.get(path_orders_opens)
+    except CoinApiError as e:
+        print(e)
+        exit()
+    if result['success'] == True:
+        inum = 1
+        for order in result['orders']:
+            print(f">opens ({inum}):{order['id']} {order['pair']} {order['order_type']} {order['rate']}({order['pending_amount']})")
+            inum += 1
+else:
+#
+# coincheck　最新の約定履歴
+#
+#path_latest = '/api/exchange/orders/transactions'
+    path_latest = '/api/exchange/orders/transactions_pagination'
+    try:
+        result = coincheck.get(path_latest)
+    except CoinApiError as e:
+        print(e)
+        exit()
+    if result['success'] == True:
+        #print(result)
+        inum = 1
+        for tran in result['data']:
+            print(f">latest({inum}):{tran['id']} {tran['pair']} {tran['side']} {tran['rate']}({tran['funds']})")
+            inum += 1
 #
 # GMO-coin　資産残高
 #
@@ -540,6 +593,10 @@ else:
 #
 #
 if dontSampling:
+    print('<< trigger status >>')
+    for sym in auto_coin_symbols:
+        db.print_trigger('BUY',  sym)
+        db.print_trigger('SELL', sym)
     # ヘッダ部の表示のみで終了する
     exit(0)
 #
@@ -635,7 +692,7 @@ def ticker(arg1, arg2):
                 result = json.loads(body.decode())
                 rate = float(result['rate'])
                 sym = key.lower()
-                rateString = rateString + f"{rate:>15,.3f}"
+                rateString = rateString + f"{rate:>15,.4f}"
                 title = None
                 if ud_rate[i] == 0.0:
                     ud_rate[i] = rate

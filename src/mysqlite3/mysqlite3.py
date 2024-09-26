@@ -35,6 +35,7 @@ class MyDb:
 #
     def update_balance(self, exchange, symbol, amount, rate, jpy):
         pre = jpy
+        symbol = symbol.lower()
         sql = "select * from balance where "\
             + f"exchange='{exchange}' and symbol='{symbol}'"
         rs = self.cur.execute(sql).fetchone()
@@ -110,10 +111,10 @@ class MyDb:
 #
 # insert auto-orders log
 #
-    def insert_orders(self, id, exchange, pair, trade, type, rate, amount):
+    def insert_orders(self, id, exchange, pair, trade, extype, rate, amount):
         # insert new datas
         sql = "insert into orders(id, exchange, pair, order_side, order_type, rate, amount)"
-        sql += f" values({id},'{exchange}','{pair}','{trade}','{type}',{rate},{amount})"
+        sql += f" values({id},'{exchange}','{pair}','{trade}','{extype}',{rate},{amount})"
         #print(sql)
         self.cur.execute(sql)
         #
@@ -124,14 +125,15 @@ class MyDb:
     def get_maxOrderBuyRate(self, exchange, pair):
         result = None
         # select last sell-record
-        sql = "select id from orders where "
+        sql = "select id,rate from orders where "
         sql += f" exchange = '{exchange}' and pair = '{pair.upper()}' and order_side = 'SELL' "
         sql += f" order by id desc  limit 1"
         #print(sql)
         self.cur.execute(sql)
         rs = self.cur.execute(sql).fetchone()
         if rs != None:
-            id  = rs['id']
+            id = rs['id']
+            rate = rs['rate']
             sql = "select max(rate) as max_rate from orders where "
             sql += f" exchange = '{exchange}' and pair = '{pair.upper()}' and order_side = 'BUY' "
             sql += f" and id > {id}"
@@ -140,21 +142,41 @@ class MyDb:
             rs = self.cur.execute(sql).fetchone()
             if rs != None:
                 result = rs['max_rate']
+            else:
+                result = rate
+            #print(f"get_maxOrderBuyRate:{result}")
         return result
 #
-# select the min rate from recent sell-orders-log
+# select the last rate from recent buy-orders-log
 #
-    def get_minOrderSellRate(self, exchange, pair):
+    def get_lastOrderBuyRate(self, exchange, pair):
         result = None
-        # select last buy-record
-        sql = "select id from orders where "
+        # select last sell-record
+        sql = "select * from orders where "
         sql += f" exchange = '{exchange}' and pair = '{pair.upper()}' and order_side = 'BUY' "
         sql += f" order by id desc  limit 1"
         #print(sql)
         self.cur.execute(sql)
         rs = self.cur.execute(sql).fetchone()
         if rs != None:
-            id  = rs['id']
+            result = rs['rate']
+        return result
+#
+#
+# select the min rate from recent sell-orders-log
+#
+    def get_minOrderSellRate(self, exchange, pair):
+        result = None
+        # select last buy-record
+        sql = "select id,rate from orders where "
+        sql += f" exchange = '{exchange}' and pair = '{pair.upper()}' and order_side = 'BUY' "
+        sql += f" order by id desc  limit 1"
+        #print(sql)
+        self.cur.execute(sql)
+        rs = self.cur.execute(sql).fetchone()
+        if rs != None:
+            id = rs['id']
+            rate = rs['rate']
             sql = "select min(rate) as min_rate from orders where "
             sql += f" exchange = '{exchange}' and pair = '{pair.upper()}' and order_side = 'SELL' "
             sql += f" and id > {id}"
@@ -163,6 +185,24 @@ class MyDb:
             rs = self.cur.execute(sql).fetchone()
             if rs != None:
                 result = rs['min_rate']
+            else:
+                result = rate
+            #print(f"get_minOrderSellRate:{result}")
+        return result
+#
+# select the last rate from recent sell-orders-log
+#
+    def get_lastOrderSellRate(self, exchange, pair):
+        result = None
+        # select last buy-record
+        sql = "select * from orders where "
+        sql += f" exchange = '{exchange}' and pair = '{pair.upper()}' and order_side = 'SELL' "
+        sql += f" order by id desc  limit 1"
+        #print(sql)
+        self.cur.execute(sql)
+        rs = self.cur.execute(sql).fetchone()
+        if rs != None:
+            result = rs['rate']
         return result
 #
 # select the last order from orders-log
@@ -182,7 +222,7 @@ class MyDb:
 #
 # 指定期間の利益を集計する
 #
-    def get_benefit(self, exchange, pair, fdate, tdate):
+    def get_benefit(self, exchange, pair, fdate, tdate, crate):
         benefit = None
         pair = pair.upper() 
         # BUY
@@ -201,10 +241,10 @@ class MyDb:
         if rs != None:
             jpy = rs['JPY']
             benefit = int(jpy)
-            amt = rs['AMT']
-            rate = benefit/amt
+            amtb = rs['AMT']
+            rate = benefit/amtb
             count = rs['CNT']
-            print(f">Buy ={benefit:,}({amt:.4f} x {rate:.3f}) <{count}>")
+            print(f">Buy ={benefit:,}({amtb:.4f} x {rate:.3f}) <{count}>")
             # SELL
             sql = "select sum(rate*amount) as JPY, sum(amount) as AMT, avg(rate) as RATE,"\
                   " count(*) as CNT from orders where order_side = 'SELL'"\
@@ -215,12 +255,15 @@ class MyDb:
             if rs != None:
                 jpy = rs['JPY']
                 jpy = int(jpy)
-                amt = rs['AMT']
-                rate = jpy/amt
+                amts = rs['AMT']
+                rate = jpy/amts
                 count = rs['CNT']
-                print(f">SELL={jpy:,}({amt:.4f} x {rate:.3f}) <{count}>")
+                print(f">SELL={jpy:,}({amts:.4f} x {rate:.3f}) <{count}>")
                 #
                 print(f">BeneFit={(jpy - benefit):,}({((jpy - benefit)*100/benefit):.2f}%)")
+                if amtb > amts:
+                    amt = amtb - amts
+                    print(f">{pair}_jpy:{int(amt*crate):,}({amt:.4f})")                
                 # 利益
                 benefit = jpy - benefit
         return benefit
@@ -242,7 +285,10 @@ class MyDb:
         else:       # 'orders'
             prmKey = 'id'
         #
-        sql = f"update {table} set {item}={value} where {prmKey}={keyVal}"
+        if item in ['method', 'exectype']:
+            sql = f"update {table} set {item}='{value}' where {prmKey}={keyVal}"
+        else:
+            sql = f"update {table} set {item}={value} where {prmKey}={keyVal}"
         print(f"update_any:{sql}")
         ret = None
         if value != '-':
@@ -289,7 +335,10 @@ class MyDb:
                 else:
                     exectype = 'MARKET'
                 '''
-                exectype = 'MARKET'
+                if symbol.upper() == 'IOST':
+                    exectype = 'LIMIT'
+                else:
+                    exectype = 'MARKET'
                 #
                 sql += f" values('{symbol}','{trade}',{rate},'{exectype}','{exchange}'"
                 if amount != None:
@@ -389,7 +438,7 @@ class MyDb:
                         update_flg = True
             #
             seqnum = rs['seqnum']
-            print(f"{method:10}({seqnum}):{update_flg}:rate={rs['rate']},"\
+            print(f"({seqnum}){method:10}:{update_flg}:rate={rs['rate']},"\
                   +  f"b_rate={b_rate:13.3f}, t_rate={t_rate:13.3f}, m_rate={m_rate}")
             if update_flg == True:
                 # update count 
@@ -405,6 +454,26 @@ class MyDb:
             self.conn.commit()
             #print(f"Trinit_triggerCount:committed.")
         return ret
+#
+#  登録済トリガーの表示
+#      
+    def print_trigger(self, trade, symbol):
+        #print(f"print_trigger( {trade.upper()}, {symbol.upper()})")
+        header = True
+        sql = "select * from trigger where "\
+            + f"trade='{trade.lower()}' and symbol='{symbol.lower()}'"
+        rs = self.cur.execute(sql).fetchone()
+        while rs != None:
+            if header == True:
+                print(f"--{symbol.upper()}({trade.upper()})--")
+                header = False
+            exchange = rs['exchange']
+            method = rs['method'].upper()
+            b_rate = rs['rate']
+            amount = rs['amount']
+            print(f"  {rs['seqnum']} {exchange:<8}:{method:<10}:{b_rate} ,{amount}<{rs['count']}>")
+            # read next record
+            rs = self.cur.fetchone()
 #
 #  トリガー指定のレートを横断したか判定する
 #      
@@ -493,7 +562,6 @@ class MyDb:
             if b_rate < 0.0:
                 # 直近の買いレート
                 max_rate = self.get_maxOrderBuyRate(exchange, symbol)
-                #print(f"max_rate:{max_rate}")
             #
             if 'IM' in method:              # 指値
                 if b_rate < 0.0:
@@ -574,7 +642,7 @@ class MyDb:
                 # update the control parmeter-count, histgram, continuing in trigger-table
                 if countA != count or cont != 0:
                     self.print_state_change(ret, count, countA, cont, \
-                                seqnum, symbol, 'Sell', method, b_rate, t_rate)
+                                seqnum, symbol, 'Sell', method, b_rate, t_rate, exchange)
                 #
                 timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
                 sql = f"update trigger set count={countA},"\
@@ -630,7 +698,6 @@ class MyDb:
             if b_rate < 0.0:                     
                 # 直近の売りレート
                 min_rate = self.get_minOrderSellRate(exchange, symbol)
-                #print(f"min_rate:{min_rate}")
             #
             if 'IM' in method:          # 指値
                 if b_rate < 0.0:                     
@@ -710,7 +777,7 @@ class MyDb:
                 # update the control parmeter-count 
                 if countA != count or cont != 0:
                     self.print_state_change(ret, count, countA, cont, \
-                                seqnum, symbol, 'Buy', method, b_rate, t_rate)
+                                seqnum, symbol, 'Buy', method, b_rate, t_rate, exchange)
                 #
                 timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
                 sql = f"update trigger set count={countA},"\
@@ -821,7 +888,7 @@ class MyDb:
 #
 # print the state(count)-change of trade trigger.
 #
-    def print_state_change(self, rslt, b_count, a_count, cont, seq, sym, trade, method, b_rate, t_rate):
+    def print_state_change(self, rslt, b_count, a_count, cont, seq, sym, trade, method, b_rate, t_rate, exchange):
         print_text =''
         if rslt == None:
             rslt = False
@@ -837,7 +904,8 @@ class MyDb:
         #
         trade = trade.upper()
         print_text += f"   >{trade}({sym}):{rslt}:{b_count}->{a_count}:"\
-                    + f"seq={seq}:{method:<10}({b_rate:,.3f}):t_rate={t_rate:13,.3f}:"
+                    + f"seq={seq}:{method:<10}({b_rate:,.3f}):t_rate={t_rate:13,.3f}:"\
+                    + f" {exchange}"
         print(print_text + self.edit_cont_text(cont) + my.colored_reset())
         return
 

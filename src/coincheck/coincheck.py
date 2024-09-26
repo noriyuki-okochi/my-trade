@@ -82,15 +82,15 @@ class Coincheck:
             res.close()
         return result 
 
-#    def delete(self, path):
-#        uri = self.url + path
-#        nonce = str(int(time.time()))
-#        message = nonce + uri
-#        signature = self.getSignature(message)
-#        return requests.delete(
-#            uri,
-#            headers = self.getHeader(self.access_key, nonce, signature)
-#        ).json()
+    def delete(self, path):
+        uri = self.url + path
+        nonce = str(int(time.time()))
+        message = nonce + uri
+        signature = self.getSignature(message)
+        return requests.delete(
+            uri,
+            headers = self.getHeader(self.access_key, nonce, signature)
+        ).json()
 
     def getSignature(self, message):
         signature = hmac.new(
@@ -121,7 +121,10 @@ class Coincheck:
             res = requests.post(uri, headers=headers, data=params, timeout=5)
             if res.status_code == 200:
                 res = res.json()
+                print(f"requestPost:{res}")
             else:
+                print(f"requestPost:status={res.status_code}")
+                print(f"requestPost:{res.json()}")
                 res = None
         except requests.exceptions.Timeout as e:
             print("Timeout:", e)
@@ -129,10 +132,11 @@ class Coincheck:
         except requests.exceptions.RequestException as e:
             print("RequestException:", e)
             res = None
+        #print(res)
         return res
 
-    def execOrder(self, symbol, order, type, rate, amount, path='/api/exchange/orders'):
-        if order.lower() == 'buy' and type.lower() == 'market':
+    def execOrder(self, symbol, order, extype, rate, amount, path='/api/exchange/orders'):
+        if order.lower() == 'buy' and extype.lower() == 'market':
             # 金額に変換
             amount = int(amount*rate)
             size = f"{amount}"
@@ -141,12 +145,15 @@ class Coincheck:
                 size = f"{amount:.4f}"
             elif symbol.lower() == 'eth':
                 size = f"{amount:.2f}"
+            elif symbol.lower() == 'iost':
+                size = f"{amount:.2f}"
             else:
                 return None
         #
+        rate = f"{rate:.4f}"
         symbol = symbol.lower() + "_jpy"
-        if type.lower() == "market":
-            order = "market_" + order.lower
+        if extype.lower() == "market":
+            order = "market_" + order.lower()
         if order == "market_buy":
             reqbody = {
                 "pair": symbol,
@@ -157,19 +164,24 @@ class Coincheck:
             reqbody = {
                 "pair": symbol,
                 "order_type": order,
+                "rate":rate,
                 "amount":size
             }
         #
         print(reqbody)
         try:
             result = self.requestPost(path, reqbody)
-            if result['status'] == 0:
-                return result['data']
-            else:
-                print(result)
-                return None
+            if result != None:
+                if result['success'] == True:
+                    return result['id']
+            #print(result)
+            return None
         except:
             print('execOrder:exception!!')
             return None
-
+    #
+    def cancelOrders(self, ids, path='/api/exchange/orders/'):
+        path = path + ids
+        res = self.delete(path)
+        return res
 # eof

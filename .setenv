@@ -20,8 +20,8 @@ HIST_CONTINUING=5
 # 売買自動取引トリガー
 #
 # <target-rate>!<scenario>:<exchange-office>:<amount>
-#   <target-rate>:: (1-9)+.(0-9)+|0.0
-#   <exchange-office>:: coinecheck|gmocoin|*
+#   <target-rate>:: [-](1-9)+.(0-9)+|0.0
+#   <exchange-office>:: coincheck|gmocoin|*
 #   <scenario>:: im|(gx|dx)(Sig(1\.[0-9]{,2}])?)?
 #   (ex.)
 #   buy-scenario
@@ -52,36 +52,46 @@ HIST_CONTINUING=5
 #       6450000.0:*:0.000
 #       6450000.0
 #   
-BTC_BUY_RATE="#10600000!im:gmocoin:0.002 0.0!gxSig:gmocoin:0.002 0.0!gxSig1.25:gmocoin:0.002 0.0!gxSig1.0:gmocoin:0.002 0.0!gxSig1.5:gmocoin:0.002 -0.05!gx:gmocoin:0.002 "
-BTC_SELL_RATE="11500000!im:gmocoin:0.00 10000000!dxSig:gmocoin:0.002 10000000!dxSig1.25:gmocoin:0.002 10000000!dxSig1.50:gmocoin:0.002 -0.05!dx:gmocoin:0.002"
+BTC_BUY_RATE="#10000000!im:gmocoin:0.004 0.0!gxSig:gmocoin:0.002 0.0!gxSig1.75:gmocoin:0.002 -0.03!gxSig1.5:gmocoin:0.002 -0.03!gxSig1.25:gmocoin:0.001 -0.03!gxSig1.0:gmocoin:0.001 -0.02!gx:gmocoin:0.002 "
+#BTC_BUY_RATE="#10000000!im:gmocoin:0.004 0.0!gxSig:gmocoin:0.004 0.0!gxSig1.75:gmocoin:0.002 0.0!gxSig1.5:gmocoin:0.002 0.0!gxSig1.25:gmocoin:0.001 0.0!gxSig1.0:gmocoin:0.001 -0.02!gx:gmocoin:0.002 "
+BTC_SELL_RATE="10400000!im:gmocoin:0.000 0.0!dxSig:gmocoin:0.002 0.0!dxSig1.75:gmocoin:0.002 9300000.0!dxSig1.5:gmocoin:0.001 9300000.0!dxSig1.25:gmocoin:0.001 9300000.0!dxSig1.0:gmocoin:0.001 #-0.02!dx:gmocoin:0.002"
+#BTC_SELL_RATE="10400000!im:gmocoin:0.000 -0.03!dxSig:gmocoin:0.004 -0.03!dxSig1.75:gmocoin:0.002 -0.03!dxSig1.5:gmocoin:0.002 -0.03!dxSig1.25:gmocoin:0.001 -0.03!dxSig1.0:gmocoin:0.001 -0.02!dx:gmocoin:0.002"
+
+BTC_BUY_RATE="$BTC_BUY_RATE 0.0!gxSig:coincheck:0.001 0.0!gxSig1.75:coincheck:0.001"
+BTC_SELL_RATE="$BTC_SELL_RATE"
+
+IOST_BUY_RATE="0.0!gxSig1.5:coincheck:2000.0 0.0!gxSig1.75:coincheck:2000.0"
+IOST_SELL_RATE="2.0850!im:coincheck:0.0 1.8310!im:coincheck:3276.301 0.0!gxSig1.5:coincheck:2000.0"
 
 ETH_BUY_RATE=""
 ETH_SELL_RATE=""
 
 MATIC_BUY_RATE="#104.0"
 MATIC_SELL_RATE="#122.5"
-
-IOST_BUY_RATE="1.650"
-IOST_SELL_RATE="1.920 2.170"
 #
 #チャート表示
 #
 COIN_SYMBOLS="btc eth iost matic"
+
 #警報値
-BTC_TARGET_RATE="10600000.0"
+BTC_TARGET_RATE="9300000.0"
+IOST_TARGET_RATE="1.00"
+#IOST_TARGET_RATE="1.870"
 ETH_TARGET_RATE="500000.0"
 MATIC_TARGET_RATE="155.5"
-IOST_TARGET_RATE="1.870"
-#基準（購入）レート
-BTC_BASE_RATE=10600000.0
+
+#基準レート
+BTC_BASE_RATE=8910000.0
+#BTC_BASE_RATE=8515651.0
+IOST_BASE_RATE=0.72
 ETH_BASE_RATE=500000.0
 MATIC_BASE_RATE=155.5
-IOST_BASE_RATE=1.870
+
 #スプレッド(%)
-BTC_SP_RATE=0.05
+BTC_SP_RATE=0.03
+IOST_SP_RATE=0.025
 ETH_SP_RATE=0.05
 MATIC_SP_RATE=0.04
-IOST_SP_RATE=0.05
 
 export SLEEP_DAYS
 export AUTO_COIN_SYMBOLS
