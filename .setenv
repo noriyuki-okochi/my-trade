@@ -2,9 +2,11 @@
 # レートサンプリングパラメータ
 #
 SLEEP_DAYS=7                # レートサンプリング継続（プログラムの生存）日数
-BLINK_RATE=5.8              # レートブリンク表示閾値（変動率%）
+BLINK_RATE=1.5              # レートブリンク表示閾値（変動率%）
+MAIL_RATE=2.0               # レート警告メイル送信閾値（変動率%：MAIL_RATE>=BLINK_RATE）
 DEL_SPAN_VALUE=1            # レートログの保存期間
 DEL_SPAN_OPT="y"            # レートログの保存期間単位('y'|'m'|'d')
+RECENTLY_ORDER=3            # 直近成約売買
 
 #売買自動取引コイン
 AUTO_COIN_SYMBOLS="btc eth iost"
@@ -15,7 +17,7 @@ ORDER_AMOUNT=50000
 #
 # DX/GX判定時のヒストグラム連続増減カウント
 #
-HIST_CONTINUING=5
+HIST_CONTINUING=4
 #
 # 売買自動取引トリガー
 #
@@ -26,7 +28,7 @@ HIST_CONTINUING=5
 #   (ex.)
 #   buy-scenario
 #       6450000.0!im:gmocoin:0.001          : 指定レートの指値と同等
-#           -0.05!im:gmocoin:0.001          : 直近売りレート5%割り引きの指値と同等
+#           -0.05!im:gmocoin:0.001          : 直近売りレート（または指定基準レート）5%割り引きの指値と同等
 #       6450000.0!gx:gmocoin:0.002          ：指定レート以下のゴールデンクロス
 #           -0.05!gx:gmocoin:0.002          ：直近売りレート5%割り引き以下のゴールデンクロス
 #             0.0!gxSig:gmocoin:0.002       ：2σ（標準偏差）以下のゴールデンクロス
@@ -38,7 +40,7 @@ HIST_CONTINUING=5
 #
 #   sell-scenario
 #       6450000.0!im:gmocoin:0.001
-#           -0.05!im:gmocoin:0.001          : 直近買いレート5%割り増しの指値と同等
+#           -0.05!im:gmocoin:0.001          : 直近買いレート（または指定基準レート）5%割り増しの指値と同等
 #       6450000.0!dx:coincheck:0.002
 #           -0.05!dx:gmocoin:0.002          ：直近買いレート5%割り増し以上のデッドクロス
 #             0.0!dxSig:gmocoin:0.002       ：2σ（標準偏差）以上のデッドクロス
@@ -52,47 +54,76 @@ HIST_CONTINUING=5
 #       6450000.0:*:0.000
 #       6450000.0
 #   
-BTC_BUY_RATE="#10000000!im:gmocoin:0.004 0.0!gxSig:gmocoin:0.002 0.0!gxSig1.75:gmocoin:0.002 -0.03!gxSig1.5:gmocoin:0.002 -0.03!gxSig1.25:gmocoin:0.001 -0.03!gxSig1.0:gmocoin:0.001 -0.02!gx:gmocoin:0.002 "
-#BTC_BUY_RATE="#10000000!im:gmocoin:0.004 0.0!gxSig:gmocoin:0.004 0.0!gxSig1.75:gmocoin:0.002 0.0!gxSig1.5:gmocoin:0.002 0.0!gxSig1.25:gmocoin:0.001 0.0!gxSig1.0:gmocoin:0.001 -0.02!gx:gmocoin:0.002 "
-BTC_SELL_RATE="10400000!im:gmocoin:0.000 0.0!dxSig:gmocoin:0.002 0.0!dxSig1.75:gmocoin:0.002 9300000.0!dxSig1.5:gmocoin:0.001 9300000.0!dxSig1.25:gmocoin:0.001 9300000.0!dxSig1.0:gmocoin:0.001 #-0.02!dx:gmocoin:0.002"
-#BTC_SELL_RATE="10400000!im:gmocoin:0.000 -0.03!dxSig:gmocoin:0.004 -0.03!dxSig1.75:gmocoin:0.002 -0.03!dxSig1.5:gmocoin:0.002 -0.03!dxSig1.25:gmocoin:0.001 -0.03!dxSig1.0:gmocoin:0.001 -0.02!dx:gmocoin:0.002"
+BTC_BUY_RATE="$BTC_BUY_RATE -0.02!gxSig:gmocoin:0.004"
+BTC_BUY_RATE="$BTC_BUY_RATE -0.02!gxSig1.75:gmocoin:0.004 -0.02!gxSig1.5:gmocoin:0.004"
+BTC_BUY_RATE="$BTC_BUY_RATE -0.02!gxSig1.25:gmocoin:0.004 -0.02!gxSig1.0:gmocoin:0.004"
+BTC_BUY_RATE="$BTC_BUY_RATE -0.02!gxSig:coincheck:0.004"
+BTC_BUY_RATE="$BTC_BUY_RATE -0.02!gxSig1.75:coincheck:0.004 -0.02!gxSig1.5:coincheck:0.004"
+BTC_BUY_RATE="$BTC_BUY_RATE -0.02!gxSig1.25:coincheck:0.004 -0.02!gxSig1.0:coincheck:0.004"
 
-BTC_BUY_RATE="$BTC_BUY_RATE 0.0!gxSig:coincheck:0.001 0.0!gxSig1.75:coincheck:0.001"
-BTC_SELL_RATE="$BTC_SELL_RATE"
+BTC_SELL_RATE="$BTC_SELL_RATE -0.02!dxSig:gmocoin:0.004"
+BTC_SELL_RATE="$BTC_SELL_RATE -0.02!dxSig1.75:gmocoin:0.004 -0.02!dxSig1.5:gmocoin:0.004"
+BTC_SELL_RATE="$BTC_SELL_RATE -0.02!dxSig1.25:gmocoin:0.004 -0.02!dxSig1.0:gmocoin:0.004"
+BTC_SELL_RATE="$BTC_SELL_RATE #15830000!im:gmocoin:0.0"
+BTC_SELL_RATE="$BTC_SELL_RATE -0.02!dxSig:coincheck:0.004"
+BTC_SELL_RATE="$BTC_SELL_RATE -0.02!dxSig1.75:coincheck:0.004 -0.02!dxSig1.5:coincheck:0.004"
+BTC_SELL_RATE="$BTC_SELL_RATE -0.02!dxSig1.25:coincheck:0.004 -0.02!dxSig1.0:coincheck:0.004"
+BTC_SELL_RATE="$BTC_SELL_RATE #15600000!im:coincheck:0.0"
 
-IOST_BUY_RATE="0.0!gxSig1.5:coincheck:2000.0 0.0!gxSig1.75:coincheck:2000.0"
-IOST_SELL_RATE="2.0850!im:coincheck:0.0 1.8310!im:coincheck:3276.301 0.0!gxSig1.5:coincheck:2000.0"
+ETH_BUY_RATE="$ETH_BUY_RATE -0.02!gxSig:gmocoin:0.04"
+ETH_BUY_RATE="$ETH_BUY_RATE -0.02!gxSig1.75:gmocoin:0.04 -0.02!gxSig1.5:gmocoin:0.04"
+ETH_BUY_RATE="$ETH_BUY_RATE -0.02!gxSig1.25:gmocoin:0.04 -0.02!gxSig1.0:gmocoin:0.04"
 
-ETH_BUY_RATE=""
-ETH_SELL_RATE=""
+ETH_SELL_RATE="$ETH_SELL_RATE -0.02!dxSig:gmocoin:0.04"
+ETH_SELL_RATE="$ETH_SELL_RATE -0.02!dxSig1.75:gmocoin:0.04 -0.02!dxSig1.5:gmocoin:0.04"
+ETH_SELL_RATE="$ETH_SELL_RATE -0.02!dxSig1.25:gmocoin:0.04 -0.02!dxSig1.0:gmocoin:0.04"
+
+IOST_BUY_RATE="$IOST_BUY_RATE -0.03!gxSig:coincheck:5000.0 #-0.03!gxSig1.75:coincheck:5000.0"
+IOST_BUY_RATE="$IOST_BUY_RATE #-0.03!gxSig1.5:coincheck:5000.0 #-0.03!gxSig1.25:coincheck:5000.0"
+IOST_BUY_RATE="$IOST_BUY_RATE #-0.03!gxSig1.0:coincheck:5000.0"
+IOST_BUY_RATE="$IOST_BUY_RATE 1.05!im:coincheck:10000.0"
+
+IOST_SELL_RATE="$IOST_SELL_RATE -0.03!gxSig:coincheck:5000.0 #-0.03!gxSig1.75:coincheck:5000.0"
+IOST_SELL_RATE="$IOST_SELL_RATE #-0.03!gxSig1.5:coincheck:5000.0 #-0.03!gxSig1.25:coincheck:5000.0"
+IOST_SELL_RATE="$IOST_SELL_RATE #-0.03!gxSig1.0:coincheck:5000.0"
+IOST_SELL_RATE="$IOST_SELL_RATE 1.18!im:coincheck:0.0"
 
 MATIC_BUY_RATE="#104.0"
 MATIC_SELL_RATE="#122.5"
+#
+#<target-rate>マイナス時の比較基準レート
+#
+BTC_STD_RATE=15750000.0
+ETH_STD_RATE=575000.0
+IOST_STD_RATE=1.18
+MATIC_STD_RATE=60.0
 #
 #チャート表示
 #
 COIN_SYMBOLS="btc eth iost matic"
 
 #警報値
-BTC_TARGET_RATE="9300000.0"
-IOST_TARGET_RATE="1.00"
-#IOST_TARGET_RATE="1.870"
-ETH_TARGET_RATE="500000.0"
-MATIC_TARGET_RATE="155.5"
+BTC_TARGET_RATE=$BTC_STD_RATE
+#BTC_TARGET_RATE=15830000
+ETH_TARGET_RATE=$ETH_STD_RATE
+#ETH_TARGET_RATE=565000
+IOST_TARGET_RATE=$IOST_STD_RATE
+#IOST_TARGET_RATE=1.18
+MATIC_TARGET_RATE=$MATIC_STD_RATE
 
 #基準レート
-BTC_BASE_RATE=8910000.0
-#BTC_BASE_RATE=8515651.0
-IOST_BASE_RATE=0.72
-ETH_BASE_RATE=500000.0
-MATIC_BASE_RATE=155.5
+BTC_BASE_RATE=$BTC_STD_RATE
+IOST_BASE_RATE=$IOST_STD_RATE
+ETH_BASE_RATE=$ETH_STD_RATE
+MATIC_BASE_RATE=$MATIC_STD_RATE
 
 #スプレッド(%)
-BTC_SP_RATE=0.03
-IOST_SP_RATE=0.025
-ETH_SP_RATE=0.05
+BTC_SP_RATE=0.02
+IOST_SP_RATE=0.03
+ETH_SP_RATE=0.02
 MATIC_SP_RATE=0.04
-
+#
+export RECENTLY_ORDER
 export SLEEP_DAYS
 export AUTO_COIN_SYMBOLS
 export BTC_SELL_RATE
@@ -103,7 +134,13 @@ export MATIC_SELL_RATE
 export MATIC_BUY_RATE
 export IOST_SELL_RATE
 export IOST_BUY_RATE
+export BTC_STD_RATE
+export IOST_STD_RATE
+export ETH_STD_RATE
+export MATIC_STD_RATE
+
 export BLINK_RATE
+export MAIL_RATE
 export ORDER_AMOUNT_JPY
 export DEL_SPAN_VALUE
 export DEL_SPAN_OPT

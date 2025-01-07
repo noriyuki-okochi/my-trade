@@ -29,6 +29,12 @@ class Coincheck:
         self.access_key = access_key
         self.secret_key = secret_key
         self.url = url
+        self.trade_unit = {\
+                'btc':10000,\
+                'eth':100,\
+                'iost':1,\
+                'matic':1\
+            }
 
     def get(self, path, params=None):
         uri = self.url + path
@@ -138,15 +144,18 @@ class Coincheck:
     def execOrder(self, symbol, order, extype, rate, amount, path='/api/exchange/orders'):
         if order.lower() == 'buy' and extype.lower() == 'market':
             # 金額に変換
-            amount = int(amount*rate)
+            unit = 1/self.trade_unit[symbol.lower()]
+            #amount = int((amount + unit)*rate)
+            amount = int((amount)*rate)
             size = f"{amount}"
+            print(f"amount={amount/rate:.6f}")
         else:
             if symbol.lower() == 'btc':
-                size = f"{amount:.4f}"
+                size = f"{amount:.8f}"
             elif symbol.lower() == 'eth':
-                size = f"{amount:.2f}"
+                size = f"{amount:.6f}"
             elif symbol.lower() == 'iost':
-                size = f"{amount:.2f}"
+                size = f"{amount:.6f}"
             else:
                 return None
         #

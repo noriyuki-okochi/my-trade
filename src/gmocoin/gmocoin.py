@@ -132,9 +132,9 @@ class GmoCoin:
     
     def execOrder(self, symbol, order, type, rate, amount, path='/v1/order'):
         if symbol.upper() == 'BTC':
-            size = f"{amount:.4f}"
+            size = f"{amount:.3f}"
         elif symbol.upper() == 'ETH':
-            size = f"{amount:.2f}"
+            size = f"{amount:.4f}"
         else:
             return None
         order = order.upper()

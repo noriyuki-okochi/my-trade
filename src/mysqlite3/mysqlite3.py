@@ -73,9 +73,31 @@ class MyDb:
         print(f">get_balanceAmount=>amount={amount}:sql={sql}")
         return amount
 #
+# select amount from orders-table
+#
+    def get_targetAmount(self, exchange, symbol, target):
+        symbol = symbol.upper()
+        # get id of latest sell-order
+        sql = "select id from orders where order_side='SELL' "\
+            + f"and exchange='{exchange}' and pair='{symbol}' order by id desc limit 1"
+        rs = self.cur.execute(sql).fetchone()
+        #
+        amount = None
+        sql = "select sum(amount) as sell_amount from orders where order_side='BUY' "\
+            + f"and rate<={target} and exchange='{exchange}' and pair='{symbol}'"
+        if rs != None:
+            sql += f" and id >{rs['id']}"
+        sql += " order by id desc"
+        rs = self.cur.execute(sql).fetchone()
+        if rs != None:
+            amount = rs['sell_amount']
+        print(f">get_targetAmount=>amount={amount}:sql={sql}")
+        return amount
+#
 # adjust amount 
 #  
     def adjust_balance(self, exchange, symbol, trade, amount):
+        symbol = symbol.lower()        
         c_amount = self.get_balanceAmount(exchange, symbol)
         if c_amount != None:
             if trade == 'SELL':
@@ -92,7 +114,7 @@ class MyDb:
 #
 # insert samplling rates logs.
 #
-    def insert_ratelogs(self, exchange, symbol, rate, timestamp=None):
+    def insert_ratelogs(self, exchange, symbol, rate, id=0, timestamp=None):
         if timestamp == None:
             d = datetime.now()
             timestamp = d.strftime('%Y-%m-%d %H:%M:%S')
@@ -100,10 +122,11 @@ class MyDb:
             d = datetime.strptime(timestamp,'%Y-%m-%d %H:%M:%S')
         time_epoc = int(time.mktime(d.timetuple()))
         sql = "insert into ratelogs"\
-            + "(exchange,symbol,rate,inserted_at,time_epoch) values("\
+            + "(exchange,symbol,rate,id,inserted_at,time_epoch) values("\
             + f"'{exchange}',"\
             + f"'{symbol}',"\
             + f"{rate},"\
+            + f"{id},"\
             + f"'{timestamp}',"\
             + f"{time_epoc})"
         self.cur.execute(sql)
@@ -119,6 +142,32 @@ class MyDb:
         self.cur.execute(sql)
         #
         self.conn.commit()
+#
+# modify the rate of ratelogs by one of orders.
+#
+    def modify_rateLogsByOrders(self, exchange, sym, timestamp):
+        # create coursor to update
+        cur1 = self.conn.cursor()
+        count = 0
+        sql = "select rate, id from orders where "\
+            + f"exchange='{exchange}' and created_at >='{timestamp}'"
+        if sym != None:
+            sql += f" and pair='{sym.upper()}'"
+        #print(sql)
+        rs = self.cur.execute(sql).fetchone()
+        while rs != None:
+            sql = f"update ratelogs set rate={rs['rate']} where id={rs['id']}"
+            print(f">{sql}")
+            cur1.execute(sql)
+            self.conn.commit()
+            count += 1
+            #
+            # read next record
+            rs = self.cur.fetchone()
+        cur1.close()
+        self.cur.close()
+        #
+        return count       
 #
 # select the max rate from recent buy-orders-log
 #
@@ -276,17 +325,32 @@ class MyDb:
         self.cur.execute(sql)
         self.conn.commit()
 #
+# delete the record with id in orders-log and ratelogs
+#
+    def delete_order(self, exchange, order_id):
+        sql = f"delete from orders where exchange='{exchange}' and id={order_id}"
+        print(sql)
+        self.cur.execute(sql)
+        sql = f"delete from ratelogs where exchange='{exchange}' and id={order_id}"
+        print(sql)
+        self.cur.execute(sql)
+        self.conn.commit()
+#
 # update the trigger/orders-table
 #
     def update_any(self, table, keyVal, item, value):
         #
         if table == 'trigger':
             prmKey = 'seqnum'
-        else:       # 'orders'
+        elif table == 'orders':       # 'orders'
             prmKey = 'id'
+        else:       # 'ratelogs'
+            prmKey = 'seqnum'
         #
         if item in ['method', 'exectype']:
             sql = f"update {table} set {item}='{value}' where {prmKey}={keyVal}"
+        elif item == 'at':      # inserted_at
+            sql = f"update {table} set inserted_at='{value}' where {prmKey}={keyVal}"
         else:
             sql = f"update {table} set {item}={value} where {prmKey}={keyVal}"
         print(f"update_any:{sql}")
@@ -372,8 +436,8 @@ class MyDb:
 #
 #  トリガー指定のレートを超えているか判定して、countの初期設定を行う
 #      
-    def init_triggerCount(self, trade, symbol, c_rate):
-        print(f"init_triggerCount( {trade.upper()}, {symbol.upper()}, {c_rate:13.3f} )")
+    def init_triggerCount(self, trade, symbol, c_rate, std_rate):
+        print(f"init_triggerCount( {trade.upper()}, {symbol.upper()}, {c_rate:13.3f} ,{std_rate})")
         ret = False
         sql = "select * from trigger where "\
             + f"trade='{trade}' and symbol='{symbol}' and "\
@@ -401,15 +465,21 @@ class MyDb:
             m_rate = None
             if b_rate < 0.0:
                 if trade == 'sell':
-                    # 直近の買いレート
-                    m_rate = self.get_maxOrderBuyRate(exchange, symbol)
+                    if std_rate != None:
+                        max_rate = float(std_rate)
+                    else:
+                        # 直近の買いレート
+                        m_rate = self.get_maxOrderBuyRate(exchange, symbol)
                     if m_rate == None:
                         b_rate = 0
                     else:
                         b_rate = m_rate*(1.0 + abs(b_rate))
                 else:
-                    # 直近の売りレート
-                    m_rate = self.get_minOrderSellRate(exchange, symbol)
+                    if std_rate != None:
+                        max_rate = float(std_rate)
+                    else:
+                        # 直近の売りレート
+                        m_rate = self.get_minOrderSellRate(exchange, symbol)
                     if m_rate == None:
                         b_rate = 0
                     else:
@@ -471,7 +541,9 @@ class MyDb:
             method = rs['method'].upper()
             b_rate = rs['rate']
             amount = rs['amount']
-            print(f"  {rs['seqnum']} {exchange:<8}:{method:<10}:{b_rate} ,{amount}<{rs['count']}>")
+            count = rs['count']
+            cont = rs['continuing']
+            print(f"  {rs['seqnum']} {exchange:<8}:{method:<10}:{b_rate} ,{amount} ({count}:{cont})")
             # read next record
             rs = self.cur.fetchone()
 #
@@ -523,7 +595,7 @@ class MyDb:
 #       c_rate: 現在のレート
 #       l_rate: 前回のレート
 #      
-    def check_sell_tradeRate(self, symbol, c_rate, l_rate):
+    def check_sell_tradeRate(self, symbol, c_rate, l_rate, std_rate):
         #
         sql = "select * from trigger where "\
             + f"trade='sell' and symbol='{symbol}' and count <> 2"        
@@ -540,7 +612,8 @@ class MyDb:
                                'amount': rs['amount'],\
                                'count':rs['count'],\
                                'histgram':rs['histgram'],\
-                               'continuing':rs['continuing']} )
+                               'continuing':rs['continuing'],\
+                               'target':None} )
             #
             # read next record
             rs = self.cur.fetchone()
@@ -560,8 +633,11 @@ class MyDb:
             #print(f"sell:{t_rate}:{method}:{l_rate} -> {c_rate}")
             exchange = rs['exchange']               # 取引所
             if b_rate < 0.0:
-                # 直近の買いレート
-                max_rate = self.get_maxOrderBuyRate(exchange, symbol)
+                if std_rate != None:
+                    max_rate = float(std_rate)
+                else:
+                    # 直近の買いレート
+                    max_rate = self.get_maxOrderBuyRate(exchange, symbol)
             #
             if 'IM' in method:              # 指値
                 if b_rate < 0.0:
@@ -630,6 +706,7 @@ class MyDb:
                         if ( hist <= 0 or (hist > 0 and cont >= hist_continuing)):
                             # デッドクロスを超えた、又は指定回数連続してヒストグラムの減少
                             countA = 2
+                            rs['target'] = t_rate
                             ret = rs      # 「売り」の実行トリガー
                         #break
                 else:
@@ -658,7 +735,7 @@ class MyDb:
 #
 # 自動取引（買い）のトリガーチェック
 #         
-    def check_buy_tradeRate(self, symbol, c_rate, l_rate):
+    def check_buy_tradeRate(self, symbol, c_rate, l_rate, std_rate):
         #
         sql = "select * from trigger where "\
             + f"trade='buy' and symbol='{symbol}' and count <> 2"        
@@ -676,7 +753,8 @@ class MyDb:
                                'amount': rs['amount'],\
                                'count':rs['count'],\
                                'histgram':rs['histgram'],\
-                               'continuing':rs['continuing']} )
+                               'continuing':rs['continuing'],\
+                               'target':None} )
             # read next record
             rs = self.cur.fetchone()
         #print(len(rsAry))
@@ -696,8 +774,11 @@ class MyDb:
             #print(f"buy :{t_rate}:{method}:{l_rate} -> {c_rate}")
             exchange = rs['exchange']
             if b_rate < 0.0:                     
-                # 直近の売りレート
-                min_rate = self.get_minOrderSellRate(exchange, symbol)
+                if std_rate != None:
+                    min_rate = float(std_rate)
+                else:
+                    # 直近の売りレート
+                    min_rate = self.get_minOrderSellRate(exchange, symbol)
             #
             if 'IM' in method:          # 指値
                 if b_rate < 0.0:                     
@@ -875,9 +956,9 @@ class MyDb:
     def edit_cont_text(self, cont):
         if cont == 0:
             cont_text = f"  cont={cont}"
-        elif cont == 5:
+        elif cont == hist_continuing:
             cont_text = my.colored_16(STYLE_NON,FG_RED,BG_BLACK,f"  cont={cont}")
-        elif cont == 4:
+        elif cont == (hist_continuing - 1):
             cont_text = my.colored_16(STYLE_BLINK,FG_RED,BG_BLACK,f"  cont={cont}")
         elif cont == 1:
             cont_text = my.colored_16(STYLE_NON,FG_YELLOW,BG_BLACK,f"  cont={cont}")
