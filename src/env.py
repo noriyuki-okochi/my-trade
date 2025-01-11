@@ -125,11 +125,15 @@ if mail_rate == None:
 else:
     mail_rate = float(mail_rate)
 #
+# ヒストグラム連続増減回数のトリガー値
+#
 hist_continuing = os.getenv('HIST_CONTINUING')
 if hist_continuing == None:
-    hist_continuing = 4
+    #hist_continuing = 4
+    hist_cont = ['4', '4', '4', '4']
 else:
-    hist_continuing = int(hist_continuing)
+    #hist_continuing = int(hist_continuing)
+    hist_cont = hist_continuing.split(',')
 
 # 注文ID
 #order_id = None
@@ -144,6 +148,8 @@ else:
 print(f"mail:{mail_rate}%, blink:{blink_rate}%")
 print(f"std_rate:{std_rate}")
 print(f"spd_rate:{sp_rate}")
+print(f"auto_coin:{auto_coin_symbols}")
+print(f"hist_cont:{hist_cont}")
 
 # 利益
 #PROFIT = os.getenv('PROFIT')

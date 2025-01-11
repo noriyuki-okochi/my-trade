@@ -622,6 +622,7 @@ class MyDb:
         method = ''
         b_rate = 0.0
         count = countA = 0
+        hist_cont_m = int(hist_cont[auto_coin_symbols.index(symbol)])
         #
         for rs in rsAry:
             seqnum = rs['seqnum']
@@ -703,7 +704,7 @@ class MyDb:
                         else:
                             cont = 0
                         hist = signe['histgram']
-                        if ( hist <= 0 or (hist > 0 and cont >= hist_continuing)):
+                        if ( hist <= 0 or (hist > 0 and cont >= hist_cont_m)):
                             # デッドクロスを超えた、又は指定回数連続してヒストグラムの減少
                             countA = 2
                             rs['target'] = t_rate
@@ -718,7 +719,7 @@ class MyDb:
             if countA != count or ( ('DX' in method) and count == 1 ):
                 # update the control parmeter-count, histgram, continuing in trigger-table
                 if countA != count or cont != 0:
-                    self.print_state_change(ret, count, countA, cont, \
+                    self.print_state_change(ret, count, countA, cont, hist_cont_m, \
                                 seqnum, symbol, 'Sell', method, b_rate, t_rate, exchange)
                 #
                 timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
@@ -763,6 +764,7 @@ class MyDb:
         count = countA = 0
         method = ''
         b_rate = 0.0
+        hist_cont_m = int(hist_cont[auto_coin_symbols.index(symbol)])
         #
         for rs in rsAry:
             seqnum = rs['seqnum']
@@ -843,7 +845,7 @@ class MyDb:
                         else:
                             cont = 0
                         hist = signe['histgram']
-                        if ( hist >= 0 or (hist < 0 and cont >= hist_continuing)):
+                        if ( hist >= 0 or (hist < 0 and cont >= hist_cont_m)):
                             # ゴールデンクロスを超えた、又は指定回数連続してヒストグラムの減少
                             countA = 2
                             ret = rs      # 「買い」の実行トリガー 
@@ -857,7 +859,7 @@ class MyDb:
             if countA != count or ( ('GX' in method) and count == 1 ):
                 # update the control parmeter-count 
                 if countA != count or cont != 0:
-                    self.print_state_change(ret, count, countA, cont, \
+                    self.print_state_change(ret, count, countA, cont, hist_cont_m, \
                                 seqnum, symbol, 'Buy', method, b_rate, t_rate, exchange)
                 #
                 timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
@@ -953,23 +955,23 @@ class MyDb:
 #
 # edit print-out text for continuing-data.
 #
-    def edit_cont_text(self, cont):
+    def edit_cont_text(self, cont, cont_m):
         if cont == 0:
-            cont_text = f"  cont={cont}"
-        elif cont == hist_continuing:
-            cont_text = my.colored_16(STYLE_NON,FG_RED,BG_BLACK,f"  cont={cont}")
-        elif cont == (hist_continuing - 1):
-            cont_text = my.colored_16(STYLE_BLINK,FG_RED,BG_BLACK,f"  cont={cont}")
+            cont_text = f"  cont={cont}/{cont_m}"
+        elif cont == cont_m:
+            cont_text = my.colored_16(STYLE_NON,FG_RED,BG_BLACK,f"  cont={cont}/{cont_m}")
+        elif cont == (cont_m - 1):
+            cont_text = my.colored_16(STYLE_BLINK,FG_RED,BG_BLACK,f"  cont={cont}/{cont_m}")
         elif cont == 1:
-            cont_text = my.colored_16(STYLE_NON,FG_YELLOW,BG_BLACK,f"  cont={cont}")
+            cont_text = my.colored_16(STYLE_NON,FG_YELLOW,BG_BLACK,f"  cont={cont}/{cont_m}")
         else:
-            cont_text = my.colored_16(STYLE_NON,FG_GREEN,BG_BLACK,f"  cont={cont}")
+            cont_text = my.colored_16(STYLE_NON,FG_GREEN,BG_BLACK,f"  cont={cont}/{cont_m}")
         return cont_text
     #
 #
 # print the state(count)-change of trade trigger.
 #
-    def print_state_change(self, rslt, b_count, a_count, cont, seq, sym, trade, method, b_rate, t_rate, exchange):
+    def print_state_change(self, rslt, b_count, a_count, cont, cont_m, seq, sym, trade, method, b_rate, t_rate, exchange):
         print_text =''
         if rslt == None:
             rslt = False
@@ -987,7 +989,7 @@ class MyDb:
         print_text += f"   >{trade}({sym}):{rslt}:{b_count}->{a_count}:"\
                     + f"seq={seq}:{method:<10}({b_rate:,.3f}):t_rate={t_rate:13,.3f}:"\
                     + f" {exchange}"
-        print(print_text + self.edit_cont_text(cont) + my.colored_reset())
+        print(print_text + self.edit_cont_text(cont, cont_m) + my.colored_reset())
         return
 
 #eof

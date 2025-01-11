@@ -6,10 +6,10 @@ BLINK_RATE=1.5              # レートブリンク表示閾値（変動率%）
 MAIL_RATE=2.0               # レート警告メイル送信閾値（変動率%：MAIL_RATE>=BLINK_RATE）
 DEL_SPAN_VALUE=1            # レートログの保存期間
 DEL_SPAN_OPT="y"            # レートログの保存期間単位('y'|'m'|'d')
-RECENTLY_ORDER=3            # 直近成約売買
+RECENTLY_ORDER=3            # 直近成約売買履歴表示（日）
 
 #売買自動取引コイン
-AUTO_COIN_SYMBOLS="btc eth iost"
+AUTO_COIN_SYMBOLS="btc eth iost matic"
 #買自動取引時のデフォルト取引量（円）
 ORDER_AMOUNT_JPY=15000
 # 対象通貨量（通貨によって異なるので未参照）
@@ -17,7 +17,8 @@ ORDER_AMOUNT=50000
 #
 # DX/GX判定時のヒストグラム連続増減カウント
 #
-HIST_CONTINUING=4
+#HIST_CONTINUING=4
+HIST_CONTINUING="4,5,3,5"
 #
 # 売買自動取引トリガー
 #
@@ -54,47 +55,47 @@ HIST_CONTINUING=4
 #       6450000.0:*:0.000
 #       6450000.0
 #   
-BTC_BUY_RATE="$BTC_BUY_RATE -0.02!gxSig:gmocoin:0.004"
-BTC_BUY_RATE="$BTC_BUY_RATE -0.02!gxSig1.75:gmocoin:0.004 -0.02!gxSig1.5:gmocoin:0.004"
-BTC_BUY_RATE="$BTC_BUY_RATE -0.02!gxSig1.25:gmocoin:0.004 -0.02!gxSig1.0:gmocoin:0.004"
-BTC_BUY_RATE="$BTC_BUY_RATE -0.02!gxSig:coincheck:0.004"
-BTC_BUY_RATE="$BTC_BUY_RATE -0.02!gxSig1.75:coincheck:0.004 -0.02!gxSig1.5:coincheck:0.004"
-BTC_BUY_RATE="$BTC_BUY_RATE -0.02!gxSig1.25:coincheck:0.004 -0.02!gxSig1.0:coincheck:0.004"
+BTC_BUY_RATE="$BTC_BUY_RATE 0.00!gxSig:gmocoin:0.002"
+BTC_BUY_RATE="$BTC_BUY_RATE -0.02!gxSig1.75:gmocoin:0.002 -0.02!gxSig1.5:gmocoin:0.002"
+BTC_BUY_RATE="$BTC_BUY_RATE -0.02!gxSig1.25:gmocoin:0.002 -0.02!gxSig1.0:gmocoin:0.002"
+BTC_BUY_RATE="$BTC_BUY_RATE -0.02!gxSig:coincheck:0.002"
+BTC_BUY_RATE="$BTC_BUY_RATE -0.02!gxSig1.75:coincheck:0.002 -0.02!gxSig1.5:coincheck:0.002"
+BTC_BUY_RATE="$BTC_BUY_RATE -0.02!gxSig1.25:coincheck:0.002 -0.02!gxSig1.0:coincheck:0.002"
 
-BTC_SELL_RATE="$BTC_SELL_RATE -0.02!dxSig:gmocoin:0.004"
-BTC_SELL_RATE="$BTC_SELL_RATE -0.02!dxSig1.75:gmocoin:0.004 -0.02!dxSig1.5:gmocoin:0.004"
-BTC_SELL_RATE="$BTC_SELL_RATE -0.02!dxSig1.25:gmocoin:0.004 -0.02!dxSig1.0:gmocoin:0.004"
+BTC_SELL_RATE="$BTC_SELL_RATE 0.00!dxSig:gmocoin:0.002"
+BTC_SELL_RATE="$BTC_SELL_RATE -0.02!dxSig1.75:gmocoin:0.002 -0.02!dxSig1.5:gmocoin:0.002"
+BTC_SELL_RATE="$BTC_SELL_RATE -0.02!dxSig1.25:gmocoin:0.002 -0.02!dxSig1.0:gmocoin:0.002"
 BTC_SELL_RATE="$BTC_SELL_RATE #15830000!im:gmocoin:0.0"
-BTC_SELL_RATE="$BTC_SELL_RATE -0.02!dxSig:coincheck:0.004"
-BTC_SELL_RATE="$BTC_SELL_RATE -0.02!dxSig1.75:coincheck:0.004 -0.02!dxSig1.5:coincheck:0.004"
-BTC_SELL_RATE="$BTC_SELL_RATE -0.02!dxSig1.25:coincheck:0.004 -0.02!dxSig1.0:coincheck:0.004"
+BTC_SELL_RATE="$BTC_SELL_RATE -0.02!dxSig:coincheck:0.002"
+BTC_SELL_RATE="$BTC_SELL_RATE -0.02!dxSig1.75:coincheck:0.002 -0.02!dxSig1.5:coincheck:0.002"
+BTC_SELL_RATE="$BTC_SELL_RATE -0.02!dxSig1.25:coincheck:0.002 -0.02!dxSig1.0:coincheck:0.002"
 BTC_SELL_RATE="$BTC_SELL_RATE #15600000!im:coincheck:0.0"
 
-ETH_BUY_RATE="$ETH_BUY_RATE -0.02!gxSig:gmocoin:0.04"
-ETH_BUY_RATE="$ETH_BUY_RATE -0.02!gxSig1.75:gmocoin:0.04 -0.02!gxSig1.5:gmocoin:0.04"
-ETH_BUY_RATE="$ETH_BUY_RATE -0.02!gxSig1.25:gmocoin:0.04 -0.02!gxSig1.0:gmocoin:0.04"
+ETH_BUY_RATE="$ETH_BUY_RATE 0.00!gxSig:gmocoin:0.02"
+ETH_BUY_RATE="$ETH_BUY_RATE -0.02!gxSig1.75:gmocoin:0.02 -0.02!gxSig1.5:gmocoin:0.02"
+ETH_BUY_RATE="$ETH_BUY_RATE -0.02!gxSig1.25:gmocoin:0.02 -0.02!gxSig1.0:gmocoin:0.02"
 
-ETH_SELL_RATE="$ETH_SELL_RATE -0.02!dxSig:gmocoin:0.04"
-ETH_SELL_RATE="$ETH_SELL_RATE -0.02!dxSig1.75:gmocoin:0.04 -0.02!dxSig1.5:gmocoin:0.04"
-ETH_SELL_RATE="$ETH_SELL_RATE -0.02!dxSig1.25:gmocoin:0.04 -0.02!dxSig1.0:gmocoin:0.04"
+ETH_SELL_RATE="$ETH_SELL_RATE 0.00!dxSig:gmocoin:0.02"
+ETH_SELL_RATE="$ETH_SELL_RATE -0.02!dxSig1.75:gmocoin:0.02 -0.02!dxSig1.5:gmocoin:0.02"
+ETH_SELL_RATE="$ETH_SELL_RATE -0.02!dxSig1.25:gmocoin:0.02 -0.02!dxSig1.0:gmocoin:0.02"
 
-IOST_BUY_RATE="$IOST_BUY_RATE -0.03!gxSig:coincheck:5000.0 #-0.03!gxSig1.75:coincheck:5000.0"
+IOST_BUY_RATE="$IOST_BUY_RATE 0.00!gxSig:coincheck:5000.0 -0.03!gxSig1.75:coincheck:5000.0"
 IOST_BUY_RATE="$IOST_BUY_RATE #-0.03!gxSig1.5:coincheck:5000.0 #-0.03!gxSig1.25:coincheck:5000.0"
 IOST_BUY_RATE="$IOST_BUY_RATE #-0.03!gxSig1.0:coincheck:5000.0"
 IOST_BUY_RATE="$IOST_BUY_RATE 1.05!im:coincheck:10000.0"
 
-IOST_SELL_RATE="$IOST_SELL_RATE -0.03!gxSig:coincheck:5000.0 #-0.03!gxSig1.75:coincheck:5000.0"
+IOST_SELL_RATE="$IOST_SELL_RATE 0.00!gxSig:coincheck:5000.0 -0.03!gxSig1.75:coincheck:5000.0"
 IOST_SELL_RATE="$IOST_SELL_RATE #-0.03!gxSig1.5:coincheck:5000.0 #-0.03!gxSig1.25:coincheck:5000.0"
 IOST_SELL_RATE="$IOST_SELL_RATE #-0.03!gxSig1.0:coincheck:5000.0"
 IOST_SELL_RATE="$IOST_SELL_RATE 1.18!im:coincheck:0.0"
 
-MATIC_BUY_RATE="#104.0"
-MATIC_SELL_RATE="#122.5"
+#MATIC_BUY_RATE="#104.0"
+#MATIC_SELL_RATE="#122.5"
 #
 #<target-rate>マイナス時の比較基準レート
 #
-BTC_STD_RATE=15750000.0
-ETH_STD_RATE=575000.0
+BTC_STD_RATE=15500000.0
+ETH_STD_RATE=551000.0
 IOST_STD_RATE=1.18
 MATIC_STD_RATE=60.0
 #
