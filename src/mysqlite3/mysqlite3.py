@@ -10,7 +10,6 @@ from env import *
 from datetime import datetime
 #
 # Private API Class for sqlite3from env import *
-
 #
 class MyDb:
     def __init__(self, dbpath='../Auto-trade.db'):
@@ -364,13 +363,20 @@ class MyDb:
 # insert trigger info. for auto-trade
 #   trigger :: '<target-rate>!<scenario>:<exchange-office>:<amount>'
 #  
-    def insert_trigger(self, symbol, trade, ratelist):
-        # delete old datas
-        sql = "delete from trigger where "\
-            + f"symbol='{symbol}' and trade='{trade}'"
-        self.cur.execute(sql)
+    def insert_trigger(self, symbol, trade, ratelist, update):
+        if update != 7:
+            # delete old datas
+            sql = "delete from trigger where "\
+                + f"symbol='{symbol}' and trade='{trade}'"
+            self.cur.execute(sql)
         # insert new datas
         for rate in ratelist:
+            if update == 7:     # 先頭'!'を追加する
+                if rate[0] != '!':
+                    continue
+                else:
+                    rate = rate[1:]
+            #print(f"insert_trigger:{rate}")
             if rate[0] == '-' or rate[0].isdigit() == True:
                 exchange = None
                 amount = None
@@ -456,7 +462,7 @@ class MyDb:
             rs = self.cur.fetchone()
 
         # 統計値の取得
-        signe = self.get_macd_signe(symbol)
+        sign = self.get_macd_sign(symbol)
 
         for rs in rsAry:
             exchange = rs['exchange']
@@ -495,13 +501,13 @@ class MyDb:
             elif 'SIG' in method:
                 # 目標レートの設定
                 if trade == 'sell':
-                    t_rate = self.get_targetRate('sell', method, signe['upper'], signe['std'])
+                    t_rate = self.get_targetRate('sell', method, sign['upper'], sign['std'])
                     if b_rate != 0 and b_rate > t_rate:
                         t_rate = b_rate
                     if t_rate > 0.0 and c_rate >= t_rate:
                         update_flg = True
                 else:
-                    t_rate = self.get_targetRate('buy', method, signe['lower'], signe['std'])
+                    t_rate = self.get_targetRate('buy', method, sign['lower'], sign['std'])
                     if b_rate != 0 and b_rate < t_rate:
                         t_rate = b_rate
                     if t_rate > 0.0 and c_rate <= t_rate:
@@ -657,7 +663,7 @@ class MyDb:
                     #break
             elif 'DX' in method:            # MACD デッドクロス
                 # 統計値の取得
-                signe = self.get_macd_signe(symbol)
+                sign = self.get_macd_sign(symbol)
                 #
                 if 'SIG' in method:
                     if b_rate < 0.0:                     
@@ -669,7 +675,7 @@ class MyDb:
                             countA = 0
                             #print(f"({method}):target rate not found.")
                     # 目標レートの設定
-                    t_rate = self.get_targetRate('sell', method, signe['upper'], signe['std'])
+                    t_rate = self.get_targetRate('sell', method, sign['upper'], sign['std'])
                     if b_rate > t_rate:
                         t_rate = b_rate
                 else:
@@ -687,23 +693,23 @@ class MyDb:
                 if t_rate != 0.0 and (c_rate >= t_rate):
                     if count == 0  and t_rate > l_rate:
                         # 目標レートを超えた
-                        if signe['histgram'] > 0:
-                            self.print_signal(signe, hist)
+                        if sign['histgram'] > 0:
+                            self.print_signal(sign, hist)
                             #
                             countA = 1
                             hist = 0.0
                             cont = 0
                             #break
                     elif count == 1:
-                        self.print_signal(signe, hist)
+                        self.print_signal(sign, hist)
                         #
-                        if abs(signe['histgram']) <= abs(hist):
+                        if abs(sign['histgram']) <= abs(hist):
                             # ヒストグラムの連続減少回数のカウントアップ
                             # ヒストグラム：MACDとシグナル線の乖離
                             cont += 1 
                         else:
                             cont = 0
-                        hist = signe['histgram']
+                        hist = sign['histgram']
                         if ( hist <= 0 or (hist > 0 and cont >= hist_cont_m)):
                             # デッドクロスを超えた、又は指定回数連続してヒストグラムの減少
                             countA = 2
@@ -799,7 +805,7 @@ class MyDb:
                     #break
             elif 'GX' in method:        # MACD ゴールデンクロス
                 # 統計値の取得
-                signe = self.get_macd_signe(symbol)
+                sign = self.get_macd_sign(symbol)
                 if 'SIG' in method:
                     if b_rate < 0.0:                     
                         # 直近の売りレートから割引
@@ -810,7 +816,7 @@ class MyDb:
                             countA = 0
                             #print(f"({method}):target rate not found.")
             # 目標レートの設定
-                    t_rate = self.get_targetRate('buy', method, signe['lower'], signe['std'])
+                    t_rate = self.get_targetRate('buy', method, sign['lower'], sign['std'])
                     if (b_rate < t_rate) and b_rate != 0.0:
                         t_rate = b_rate
                 else:
@@ -828,23 +834,23 @@ class MyDb:
                 if c_rate <= t_rate:
                     if count == 0  and t_rate < l_rate:
                         # 目標レートを下回った
-                        if signe['histgram'] < 0:
-                            self.print_signal(signe, hist)
+                        if sign['histgram'] < 0:
+                            self.print_signal(sign, hist)
                             #
                             countA = 1
                             hist = 0.0
                             cont = 0
                             #break
                     elif count == 1:
-                        self.print_signal(signe, hist)
+                        self.print_signal(sign, hist)
                         #
-                        if abs(signe['histgram']) <= abs(hist):
+                        if abs(sign['histgram']) <= abs(hist):
                             # ヒストグラムの連続減少回数のカウントアップ
                             # ヒストグラム：MACDとシグナル線の乖離
                             cont += 1 
                         else:
                             cont = 0
-                        hist = signe['histgram']
+                        hist = sign['histgram']
                         if ( hist >= 0 or (hist < 0 and cont >= hist_cont_m)):
                             # ゴールデンクロスを超えた、又は指定回数連続してヒストグラムの減少
                             countA = 2
@@ -890,7 +896,7 @@ class MyDb:
 #
 # calculate MACD or other parameters.
 #
-    def get_macd_signe(self, symbol):
+    def get_macd_sign(self, symbol):
         # read rate-data from db to pandas
         params = {'sym':symbol, 'limit':0}
         df = self.pandas_read_ratelogs( params )
@@ -937,18 +943,18 @@ class MyDb:
 #
 # print out signal-data.
 #
-    def print_signal(self, signe, hist):
-        if ( abs(signe['histgram'])) < abs(hist):
-            print_text = my.colored_16(STYLE_NON,FG_GREEN,BG_BLACK,f"   >hist={signe['histgram']:12.3f},")
+    def print_signal(self, sign, hist):
+        if ( abs(sign['histgram'])) < abs(hist):
+            print_text = my.colored_16(STYLE_NON,FG_GREEN,BG_BLACK,f"   >hist={sign['histgram']:12.3f},")
             print_text += my.colored_reset()
-        elif signe['histgram'] < 0.0:
-            print_text = my.colored_16(STYLE_NON,FG_RED,BG_BLACK,f"   >hist={signe['histgram']:12.3f},")
+        elif sign['histgram'] < 0.0:
+            print_text = my.colored_16(STYLE_NON,FG_RED,BG_BLACK,f"   >hist={sign['histgram']:12.3f},")
             print_text += my.colored_reset()
         else:
-            print_text = f"   >hist={signe['histgram']:12.3f},"
+            print_text = f"   >hist={sign['histgram']:12.3f},"
 
-        print_text += f" std={signe['std']:12.3f}, "\
-                   + f"upper={signe['upper']:12.3f}, lower={signe['lower']:12.3f}"
+        print_text += f" std={sign['std']:12.3f}, "\
+                   + f"upper={sign['upper']:12.3f}, lower={sign['lower']:12.3f}"
         print(print_text)
         return
 

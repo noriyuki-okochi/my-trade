@@ -17,7 +17,7 @@ import urllib.request as http
 # local
 from env import *
 from myApi import *
-from coincheck.coincheck import *
+from coincheck.coincheck import Coincheck, CoinApiError
 from gmocoin.gmocoin import GmoCoin
 from mysqlite3.mysqlite3 import MyDb
 
@@ -132,11 +132,11 @@ if len(opts) > 1 and opts[1] == '-h':
     print(" -tRADElOG (gmo|coin) <symbol> (buy|sell) <rate> [<id>]")
     print(" -cANCLE (gmo|coin) <id>")
     print(" -bENEFIT (gmo|coin) <symbol> [<from-date>]:[<to-date>]")
-    print(" -uPDATE (trigger|orders|ratelogs) <key-val> <item> [<value>]")
+    print(" -uPDATE (trigger|orders|ratelogs) (<key-val>,).. <item> [<value>]")
     print(" -sUSPEND (<seqnum>,)...")
     print(" -rESUMU (<seqnum>,)...")
     print(" -mODIFYrateLogsByOrderRate (gmo|coin) [<symbol>]")
-    print(" -Header [-t|-tb|-ts] [-i] [-o]")
+    print(" -Header [-t|-tb|-ts|-t!] [-i] [-o]")
     print("    -t|-tb|-ts::update trigger, -i::initialize trigger-count, -o::opens")
     print(" --- option ---")
     print(" -dELETE([0-9]+)[y|m|d]")
@@ -161,17 +161,19 @@ if len(opts) > 1 and opts[1] == '-H':
         # 自動取引トリガーを更新する
         updateTrigger = 3
         if opts[2] == '-tb':
-            updateTrigger = 1
+            updateTrigger = 1       # 買いのトリガーのみ
         if opts[2] == '-ts':
-            updateTrigger = 2
+            updateTrigger = 2       # 売りのトリガーのみ
+        if opts[2] == '-t!':
+            updateTrigger = 7       # 先頭"!"付きトリガーのみ
     if '-i' in opts:
-        initTriggerCount = 1
-    if '-o' in opts:
+        initTriggerCount = 1        # トリガーのcountを現在レートで初期設定する
+    if '-o' in opts:                # 未決済の注文を表示する（coincheckのみ）
         showOpens = True
 #
 #
 # テーブルの更新
-#    -u  (trigger|orders|ratelogs) <key-val> <item> [<value>]
+#    -u  (trigger|orders|ratelogs) (<key-val>,)..] <item> [<value>]
 #       <key-val>   :: key-value(seqnum|id)
 #       <item>      :: column-name
 #
@@ -198,18 +200,28 @@ if len(opts) >= 5 and opts[1] == '-u':
         if table == 'ratelogs' and (not item in ['rate', 'at']):
             item_ok = False
         #
-        if keyVal.isdigit():
-            if item_ok:
-                if value == None:
-                    print(f">Please input new-value.![/:cancle]")
-                    value = input('>')
-                if value != '/':
-                    ret = db.update_any(table, keyVal, item, value)
-                    print(f">ret={ret}")
+        start =  None
+        keyvalList = keyVal.split(',')
+        for keyval in keyvalList:
+            if start == None:
+                start = keyval
             else:
-                print(f">'{item}' can not specified.!!")
-        else:
-            print(f">illegal key-val[{keyVal}]!!")
+                if len(keyval) < len(start):
+                    keyval = start[:len(start) - len(keyval)] + keyval
+            if keyval.isdigit():
+                if item_ok:
+                    if value == None:
+                        print(f">Please input new-value.![/:cancle]")
+                        value = input('>')
+                    if value != '/':
+                        ret = db.update_any(table, keyval, item, value)
+                        print(f">ret={ret}")
+                else:
+                    print(f">'{item}' can not specified.!!")
+                    break
+            else:
+                print(f">illegal key-val[{keyval}]!!")
+                break
     else:
         print(f">illegal table-name[{table}]!!")
     #
@@ -221,13 +233,22 @@ if len(opts) >= 5 and opts[1] == '-u':
 #       <seqnum>   :: trigger sequence no.
 #
 if len(opts) >= 2 and (opts[1] == '-s' or opts[1] == '-r'):
+    start =  None
     seqlist = opts[2].split(',')
     for seqnum in seqlist:
-        if opts[1] == '-s':
-            db.update_any('trigger', seqnum, 'count', 2)
+        if start == None:
+            start = seqnum
         else:
-            db.update_any('trigger', seqnum, 'count', 0)
-            db.update_any('trigger', seqnum, 'continuing', 0)
+            if len(seqnum) < len(start):
+                seqnum = start[:len(start) - len(seqnum)] + seqnum
+        if seqnum.isdigit():
+            if opts[1] == '-s':
+                db.update_any('trigger', seqnum, 'count', 2)
+            else:
+                db.update_any('trigger', seqnum, 'count', 0)
+                db.update_any('trigger', seqnum, 'continuing', 0)
+        else:
+            print(f">illegal seqnum[{seqnum}]!!")        
     exit()
 #
 # coincheck 現在レート取得
@@ -489,10 +510,10 @@ if updateTrigger != 0:
             print(f"{sym}:{target_rate[sym]}")
         if buy_rate[sym] != None and (updateTrigger & 1) != 0:
             #print(f"{sym}_buy_rate  :{buy_rate[sym]}")
-            db.insert_trigger(sym, TRADE_BUY, buy_rate[sym].split())
+            db.insert_trigger(sym, TRADE_BUY, buy_rate[sym].split(), updateTrigger)
         if sell_rate[sym] != None and (updateTrigger & 2) != 0:
             #print(f"{sym}_sell_rate :{sell_rate[sym]}")
-            db.insert_trigger(sym, TRADE_SELL, sell_rate[sym].split())
+            db.insert_trigger(sym, TRADE_SELL, sell_rate[sym].split(), updateTrigger)
     print('-')
     print(f"< hist_continuing >  = {hist_continuing}")
     print(f"< order_amount_jpy > = {order_amount_jpy}")
