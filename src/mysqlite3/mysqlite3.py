@@ -549,7 +549,7 @@ class MyDb:
             amount = rs['amount']
             count = rs['count']
             cont = rs['continuing']
-            print(f"  {rs['seqnum']} {exchange:<8}:{method:<10}:{b_rate} ,{amount} ({count}:{cont})")
+            print(f"  {rs['seqnum']} {exchange:<9}:{method:<10}:{b_rate} ,{amount} ({count}:{cont})")
             # read next record
             rs = self.cur.fetchone()
 #
@@ -628,7 +628,8 @@ class MyDb:
         method = ''
         b_rate = 0.0
         count = countA = 0
-        hist_cont_m = int(hist_cont[auto_coin_symbols.index(symbol)])
+        hist_cont_m = int(hist_cont_l_s[auto_coin_symbols.index(symbol)])
+        pct_change_m = float(pct_change_l[auto_coin_symbols.index(symbol)])
         #
         for rs in rsAry:
             seqnum = rs['seqnum']
@@ -770,7 +771,8 @@ class MyDb:
         count = countA = 0
         method = ''
         b_rate = 0.0
-        hist_cont_m = int(hist_cont[auto_coin_symbols.index(symbol)])
+        hist_cont_m = int(hist_cont_l_b[auto_coin_symbols.index(symbol)])
+        pct_change_m = float(pct_change_l[auto_coin_symbols.index(symbol)])
         #
         for rs in rsAry:
             seqnum = rs['seqnum']
@@ -915,6 +917,11 @@ class MyDb:
         # MACD,SIGNAL
         mdfil["macd"] = mdfil["ema12"] - mdfil["ema26"]
         mdfil["signal"] = mdfil["macd"].ewm(span=9,adjust=False).mean()
+        # 
+        for col_name, itemSer in mdfil.items():
+            if col_name == idx_change:
+                mdfil["pct"] = itemSer
+                mdfil["pct"] = mdfil["pct"].pct_change(prd_change).fillna(method = 'bfill')
 
         # get Series from DataFrame and latest datas.
         macdSer = mdfil["macd"]
@@ -926,7 +933,13 @@ class MyDb:
         upper = samSer[-1] + stdSer[-1] * 2 
         lower = samSer[-1] - stdSer[-1] * 2 
         #
-        return { 'histgram': histgram, 'upper':upper, 'lower':lower, 'std':stdSer[-1]}
+        if 'pct' in mdfil.columns:
+            pctSer = mdfil["pct"]
+        else:
+            pctSer = None
+            print(f"{idx_change} is not found in columns")
+        #
+        return { 'histgram': histgram, 'upper':upper, 'lower':lower, 'std':stdSer[-1], 'pct':pctSer[-1] }
 #
 # delete the rate-logs before the specified datetime.
 #
@@ -954,7 +967,7 @@ class MyDb:
             print_text = f"   >hist={sign['histgram']:12.3f},"
 
         print_text += f" std={sign['std']:12.3f}, "\
-                   + f"upper={sign['upper']:12.3f}, lower={sign['lower']:12.3f}"
+                   + f"upper={sign['upper']:12.3f}, lower={sign['lower']:12.3f}, pct={sign['pct']:.4f}"
         print(print_text)
         return
 
