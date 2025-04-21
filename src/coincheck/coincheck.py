@@ -2,13 +2,8 @@
 #
 #Class for coincheck
 #     
-import sys
-#print(sys.path)
-import os
-from math import sqrt
 import json
 import time
-from datetime import datetime
 import hmac
 import hashlib
 import urllib.request as http
@@ -146,7 +141,7 @@ class Coincheck:
             # 金額に変換
             unit = 1/self.trade_unit[symbol.lower()]
             #amount = int((amount + unit)*rate)
-            amount = int((amount)*rate)
+            amount = int(amount*rate + 0.5)
             size = f"{amount}"
             print(f"amount={amount/rate:.6f}")
         else:

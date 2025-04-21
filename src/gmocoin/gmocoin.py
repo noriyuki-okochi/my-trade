@@ -2,11 +2,6 @@
 #
 #mClass for GMO coin
 #     
-from distutils.command import install_headers
-import sys
-#print(sys.path)
-import os
-from math import sqrt
 import json
 import time
 from datetime import datetime
@@ -132,7 +127,7 @@ class GmoCoin:
     
     def execOrder(self, symbol, order, type, rate, amount, path='/v1/order'):
         if symbol.upper() == 'BTC':
-            size = f"{amount:.3f}"
+            size = f"{amount:.5f}"
         elif symbol.upper() == 'ETH':
             size = f"{amount:.4f}"
         else:
