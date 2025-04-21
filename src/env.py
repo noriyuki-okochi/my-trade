@@ -127,14 +127,34 @@ else:
 #
 # ヒストグラム連続増減回数のトリガー値
 #
-hist_continuing = os.getenv('HIST_CONTINUING')
-if hist_continuing == None:
+hist_continuing_b = os.getenv('HIST_CONTINUING_B')
+if hist_continuing_b == None:
     #hist_continuing = 4
-    hist_cont = ['4', '4', '4', '4']
+    hist_cont_l_b = ['4', '4', '4', '4']
 else:
     #hist_continuing = int(hist_continuing)
-    hist_cont = hist_continuing.split(',')
+    hist_cont_l_b = hist_continuing_b.split(',')
 
+hist_continuing_s = os.getenv('HIST_CONTINUING_S')
+if hist_continuing_s == None:
+    hist_cont_l_s = ['4', '4', '4', '4']
+else:
+    hist_cont_l_s = hist_continuing_s.split(',')
+#
+# 変化率の判定指標
+#
+idx_change = os.getenv('IDX_CHANGE')
+prd_change = os.getenv('PRD_CHANGE')
+if prd_change == None:
+    prd_change = 1
+else:
+    prd_change = int(prd_change)
+#
+pct_change = os.getenv('PCT_CHANGE')
+if pct_change == None:
+    pct_change_l = ['0.001', '0.002', '0.003', '0.004']
+else:
+    pct_change_l = pct_change.split(',')
 # 注文ID
 #order_id = None
 # 購入金額
@@ -145,11 +165,31 @@ else:
     order_amount_jpy = int(order_amount_jpy)
 
     
-print(f"mail:{mail_rate}%, blink:{blink_rate}%")
-print(f"std_rate:{std_rate}")
-print(f"spd_rate:{sp_rate}")
+print(f"---- list of setenv values ----")
 print(f"auto_coin:{auto_coin_symbols}")
-print(f"hist_cont:{hist_cont}")
+print(f"std_rate:{std_rate}")
+print(f"spd_pct:{sp_rate}")
+print(f"hist_cont_b:{hist_cont_l_b}")
+print(f"hist_cont_s:{hist_cont_l_s}")
+print(f"idx_change:{idx_change}, prd_change:{prd_change}")
+print(f"pct_change:{pct_change_l}")
+print(f"mail:{mail_rate}%, blink:{blink_rate}%")
+print(f"-------------------------------")
+'''
+AutoParam = {
+    'auto_coin':auto_coin_symbols,
+    'std_rate':std_rate,
+    'spd_pct':sp_rate,
+    'hist_cont_b':hist_cont_l_b,
+    'hist_cont_s':hist_cont_l_s,
+    'idx_change':idx_change,
+    'prd_change':prd_change,
+    'pct_change':pct_change_l,
+    'mail_rate':mail_rate,
+    'blink_rate':blink_rate
+}
+print(AutoParam)
+'''
 
 # 利益
 #PROFIT = os.getenv('PROFIT')
