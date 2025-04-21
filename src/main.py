@@ -89,7 +89,7 @@ def exec_trade(exchange, symbol, trade, extype, rate, amount=None, target=None):
     id = None
     if exchange == EXCHANGE_CHECK:
         tradeObj = coincheck
-        if symbol.upper() not in ['BTC','IOST']:
+        if symbol.upper() not in ['BTC','ETH','IOST']:
             id = 0
     elif exchange == EXCHANGE_GMO:
         tradeObj = gmocoin
@@ -99,7 +99,8 @@ def exec_trade(exchange, symbol, trade, extype, rate, amount=None, target=None):
         id = 0
     #
     if id == 0:
-        return id       # this coin is not supported.
+        print(f">exec_trade:{exchange}:{symbol} is not supported.")
+        return id
     #
     #
     if amount == None or amount == 0.0:
@@ -108,7 +109,7 @@ def exec_trade(exchange, symbol, trade, extype, rate, amount=None, target=None):
             print(f">exec_trade:amount={amount}")
             return 0
     
-    order_jpy = int(amount * rate)
+    order_jpy = int(amount * rate + 0.5)
     print(f">exec_trade({symbol}):{trade} amount={amount}, rate={rate:13.3f}, order_jpy={order_jpy}")
 
     id = tradeObj.execOrder(symbol, trade, extype, rate, amount)
@@ -393,7 +394,7 @@ if len(opts) >= 6 and (opts[1] == '-t' or opts[1] == '-tl'):
             if ans == 'y':
                 id = exec_trade(exchange, symbol, side, extype, rate, amount)
                 print(f">ID={id}")
-                if id != None:
+                if id != None or id == 0:
                     # insert to DB(ratelogs)
                     db.insert_ratelogs(exchange, symbol+'_'+side, rate, id)
         else:
@@ -515,7 +516,6 @@ if updateTrigger != 0:
             #print(f"{sym}_sell_rate :{sell_rate[sym]}")
             db.insert_trigger(sym, TRADE_SELL, sell_rate[sym].split(), updateTrigger)
     print('-')
-    print(f"< hist_continuing >  = {hist_continuing}")
     print(f"< order_amount_jpy > = {order_amount_jpy}")
 #
 # 起動時のレートがトリガー指定レートを超えているときcountを１に初期化する
@@ -538,7 +538,8 @@ print('\n<< balance >>')
 #
 print('-- coincheck --                                           -- Latest trade(buy) --')
 path_balance = '/api/accounts/balance'
-names = ['jpy', 'btc','eth','iost','matic']
+#names = ['jpy', 'btc','eth','iost','matic']
+names = ['jpy', 'btc','eth','iost']
 try:
     result = coincheck.get(path_balance)
 except CoinApiError as e:
@@ -559,7 +560,7 @@ for key, item in result.items():
         order = db.get_lastOrder(EXCHANGE_CHECK, key, TRADE_BUY)
         outstring = f"{key:5}:"\
                   + f"{float(item):13,.5f}("\
-                  + f"{float(conversionRate[i]):13,.3f}) ="\
+                  + f"{float(conversionRate[i]):14,.3f}) ="\
                   + f"{jpy:8,}({pre:8,})     {order}"
         if  order != None:
             outstring += f"  ({int(order['rate']*order['amount']):6,})"
@@ -612,6 +613,7 @@ else:
 # GMO-coin　資産残高
 #
 print('-- GMO-coin --                                           -- Latest trade(buy) --')
+names = ['BTC', 'ETH']
 path_balance = '/v1/account/assets'
 try:
     result = gmocoin.get(path_balance)
@@ -621,7 +623,7 @@ except CoinApiError as e:
 if result['status'] == 0:
     datalist = result['data']
     for data in datalist:
-        if float(data['amount']) > 0.0:
+        if data['symbol'] in names and float(data['amount']) > 0.0:
             jpy = int(float(data['amount'])*float(data['conversionRate']))
             pre = db.update_balance(EXCHANGE_GMO, data['symbol'].lower(),
                               float(data['amount']), 
@@ -632,7 +634,7 @@ if result['status'] == 0:
             order = db.get_lastOrder(EXCHANGE_GMO, data['symbol'], TRADE_BUY)
             outstring = f"{data['symbol']:5}:"\
                       + f"{float(data['amount']):13,.5f}("\
-                      + f"{float(data['conversionRate']):13,.3f}) ="\
+                      + f"{float(data['conversionRate']):14,.3f}) ="\
                       + f"{jpy:8,}({pre:8,})     {order}"
             if  order != None:
                 outstring += f"  ({int(order['rate']*order['amount']):6,})"
@@ -644,7 +646,7 @@ else:
 # GMO-coin　最新の約定履歴
 #
 path_latest = '/v1/latestExecutions'
-for sym in ['BTC', 'ETH']:
+for sym in names:
     try:
         params = { "symbol": sym, "page": 1, "count":100 }
         result = gmocoin.get(path_latest, params)
@@ -720,6 +722,8 @@ before_rate = {'btc':None,
 #
 last_time = None
 for symbol in last_rate:
+    if symbol not in auto_coin_symbols:
+        continue
     rslt = db.select_lastRate(EXCHANGE_CHECK, symbol, RATELOGS_DAYS)
     if rslt == None:
         db.insert_ratelogs(EXCHANGE_CHECK, symbol, 0.0)
@@ -749,6 +753,8 @@ symbols = {\
 # edit header line and display first.
 header =''
 for key, item in symbols.items():
+    if key.lower() not in auto_coin_symbols:
+        continue
     symbol = '--' + key + '--'
     header = header + f"{symbol:^24}"
 
@@ -783,7 +789,9 @@ def ticker(arg1, arg2):
         #
         i = 0
         for key, item in symbols.items():
-            # get current rate(_jpy) from coincheck
+            if key.lower() not in auto_coin_symbols:
+                continue
+           # get current rate(_jpy) from coincheck
             req = http.Request(URL+item, method='GET')
             res = http.urlopen(req)
             if res.status == 200:
