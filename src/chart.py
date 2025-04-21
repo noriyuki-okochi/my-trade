@@ -1,4 +1,47 @@
 #
+"""
+This script generates a candlestick chart with various technical indicators for cryptocurrency trading data.
+It uses Plotly for visualization and reads data from a SQLite database.
+Usage:
+    chart.py {symbol1 [symbol2]|*} [display-days] [-past-days] [-m(acd)] 
+             [-a(uto)] [-d(ebug)] [-b(ottom)] [-p(redict)[split-size]]
+Arguments:
+    symbol1, symbol2: Cryptocurrency symbols to display. Use '*' to display all available symbols.
+    display-days: Number of days to display on the chart.
+    -past-days: Number of past days to consider for the chart.
+    -m: Display MACD (Moving Average Convergence Divergence) indicator.
+    -a: Display auto-trade points.
+    -d: Enable debug mode.
+    -b: Position the legend at the bottom.
+    -p: Enable prediction mode with optional split size for training/testing data.
+Modules:
+    - sys: Provides access to command-line arguments.
+    - os: Provides a way of using operating system dependent functionality.
+    - pandas: Data analysis and manipulation library.
+    - plotly: Interactive graphing library.
+    - env: Local module for environment variables.
+    - myApi: Local module for API interactions.
+    - mysqlite3.mysqlite3: Local module for SQLite database interactions.
+    - mylearn.mylearn: Local module for machine learning operations.
+Functions:
+    - make_subplots: Creates a subplot grid for the chart.
+    - add_trace: Adds a trace (data series) to the chart.
+    - update_layout: Updates the layout of the chart.
+    - update_traces: Updates the properties of traces in the chart.
+    - write_html: Writes the chart to an HTML file and optionally opens it in a web browser.
+Classes:
+    - MyDb: Class for interacting with the SQLite database.
+    - MyLearn: Class for machine learning operations.
+Workflow:
+    1. Parse command-line arguments.
+    2. Connect to the SQLite database.
+    3. Read and process rate data for the specified symbols.
+    4. Generate technical indicators (SMA, EMA, MACD, etc.).
+    5. Create subplots and add traces for each symbol.
+    6. Optionally, perform machine learning predictions.
+    7. Update the layout and properties of the chart.
+    8. Write the chart to an HTML file and open it in a web browser.
+"""
 # chart main
 #     
 import sys
@@ -8,9 +51,9 @@ from env import *
 from myApi import *
 from mysqlite3.mysqlite3 import MyDb
 import pandas as pd
-import numpy as np
+#import numpy as np
 import plotly.graph_objects as go
-import plotly.figure_factory as ff
+#import plotly.figure_factory as ff
 from plotly.subplots import make_subplots
 from mylearn.mylearn import MyLearn
 
@@ -100,7 +143,8 @@ if selsyms[0] == '*':
 else:
     if macd_flg == True :
         fig = make_subplots(rows=2, cols=1, vertical_spacing=0.2,
-                        subplot_titles=[selsyms[0].upper(),'MACD'])
+                        subplot_titles=[selsyms[0].upper(),'MACD'],
+                        specs=[[{"secondary_y": False}], [{"secondary_y": True}]])
     elif predict_flg == True:
         fig = make_subplots(rows=2, cols=1, vertical_spacing=0.2,
                         subplot_titles=[selsyms[0].upper(),'Permutation Importance'])
@@ -141,12 +185,9 @@ for sym in coin_symbols:
         #
         # fill Non data with left col
         mdfil = mdf.fillna(method = 'ffill',inplace = False)
-        #print(f"--mdf.count--\n{mdf.count()}")
-        #print(f"--mdfil.count--\n{mdfil.count()}")
         # SMA
         mdfil["sma5"] = mdfil["Close"].rolling(window=5).mean()
         mdfil["sma25"] = mdfil["Close"].rolling(window=25).mean()
-        #mdfil["sma75"] = mdfil["Close"].rolling(window=75).mean()
         # STD
         mdfil["std"] = mdfil["Close"].rolling(window=25).std(ddof=1)
         # EMA
@@ -155,7 +196,6 @@ for sym in coin_symbols:
         # MACD,SIGNAL
         mdfil["macd"] = mdfil["ema12"] - mdfil["ema26"]
         mdfil["signal"] = mdfil["macd"].ewm(span=9,adjust=False).mean()
-#        mdfil["signal"] = mdfil["macd"].rolling(window=9).mean()
         #
         # select diaplay datas
         #
@@ -349,9 +389,6 @@ for sym in coin_symbols:
                             row = irow, 
                             col = icol   
                         )
-            #print(mdfil.index)
-            #print(mdf_buy.index)
-            
         # < MACD >
         if macd_flg == True:
             #macd
@@ -380,7 +417,25 @@ for sym in coin_symbols:
                             row = 2, 
                             col = 1   
                         )
-        
+            #ptc_change
+            for col_name, itemSer in mdfil.items():
+                #print(f"{col_name}, {idx_change}")
+                if col_name == idx_change:
+                    mdfil["pct_change"] = itemSer
+                    mdfil["pct_change"] = mdfil["pct_change"].pct_change(prd_change).fillna(method = 'bfill')
+            #
+            if 'pct_change' in mdfil.columns:
+                fig = fig.add_trace( go.Bar(x=mdfil.index, 
+                                    name="anyone",
+                                    y=mdfil["pct_change"], 
+                                    marker_color= 'yellow'),
+                            secondary_y=True,
+                            row = 2, 
+                            col = 1   
+                        )
+            else:
+                print(f"{idx_change} is not found in columns")
+        #
         # < Permutation Importance >
         if predict_flg == True and macd_flg == False:
             #importance
@@ -444,10 +499,15 @@ else:
         if macd_flg == True:
             fig.update_layout(
                 #xaxis_rangeslider = dict(visible=True),
-                yaxis_title = 'Rate', yaxis2_title = 'EMA', 
                 xaxis1_title = "Hour", 
+                yaxis = dict(title='Rate'), 
+                yaxis2= dict(title='EMA', side='left'), 
                 showlegend = True
             )
+            titleStr = idx_change.upper() + "-change(%)"
+            fig.update_yaxes(title_text=titleStr, showgrid=False, 
+                             range=(-0.02, 0.04), secondary_y=True, 
+                             row=2, col=1)
             fig.update_traces(dict(showlegend = False), row=2, col=1)
         elif predict_flg == True:
             fig.update_layout(
@@ -457,8 +517,9 @@ else:
                 showlegend = True
             )
             fig.update_traces(
-                dict(showlegend = False, texttemplate='%{x:0.3f}',textposition='outside', orientation='h'), 
-                row=2, col=1)
+                dict(showlegend = False, texttemplate='%{x:0.3f}',
+                    textposition='outside', orientation='h'), 
+                    row=2, col=1)
             fig.update_xaxes(showticklabels = True, row=2, col=1)
 #
 # open the figure in  web-browser
