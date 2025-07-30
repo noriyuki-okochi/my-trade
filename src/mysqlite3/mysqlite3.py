@@ -17,6 +17,10 @@ class MyDb:
         self.conn = sqlite3.connect(dbpath)
         self.conn.row_factory = sqlite3.Row
         self.cur = self.conn.cursor()
+        timestamp = datetime.now().strftime('%Y%m%d')
+        self.logfile = open(dbpath[:dbpath.rfind('/')+1] + f"log{timestamp}.txt", 'a')
+        #self.logfile.write(f"DB opened: {dbpath}\n")
+        #self.logfile.flush()
 
     def rollback(self):
         self.conn.rollback()
@@ -420,6 +424,25 @@ class MyDb:
                 self.cur.execute(sql)
         #
         self.conn.commit()
+#
+# get trigger info. for auto-trade
+#   trigger :: '<target-rate>!<scenario>:<exchange-office>:<amount>'
+#  
+    def get_trigger(self, trigger):
+        sql = f"select * from trigger where seqnum={trigger}"
+        rs = self.cur.execute(sql).fetchone()
+        #
+        # store selected records to temporary array.
+        #  
+        info = None
+        if rs != None:
+            info = {'symbol':rs['symbol'],\
+                     'exchange':rs['exchange'],\
+                     'side':rs['trade'],\
+                     'exectype':rs['exectype'],\
+                     'rate':rs['rate'],\
+                     'amount':rs['amount']}
+        return info
 #
 # 最終ログのレートを取得する
 #
@@ -853,7 +876,9 @@ class MyDb:
                         else:
                             cont = 0
                         hist = sign['histgram']
-                        if ( hist >= 0 or (hist < 0 and cont >= hist_cont_m)):
+                        #pct = sign['pct']
+                        #if ( hist >= 0 or (hist < 0 and cont >= hist_cont_m and pct >= 0.0)):
+                        if ( hist >= 0 or (hist < 0 and cont >= hist_cont_m) ):
                             # ゴールデンクロスを超えた、又は指定回数連続してヒストグラムの減少
                             countA = 2
                             ret = rs      # 「買い」の実行トリガー 
@@ -969,6 +994,11 @@ class MyDb:
         print_text += f" std={sign['std']:12.3f}, "\
                    + f"upper={sign['upper']:12.3f}, lower={sign['lower']:12.3f}, pct={sign['pct']:.4f}"
         print(print_text)
+        #
+        # logwrite
+        # 
+        print_text = f" >hist={sign['histgram']:12.3f}, pct={sign['pct']:.4f}"
+        self.logwrite(print_text)   
         return
 
 #
@@ -997,6 +1027,13 @@ class MyDb:
         else:
             rslt = True
         #
+        trade = trade.upper()
+        msg = f"{trade}({sym}):{rslt}:{b_count}->{a_count}:"\
+            + f"seq={seq}:{method:<10}({b_rate:,.3f}):t_rate={t_rate:13,.3f}:"\
+            + f" {exchange}"
+        #
+        # display msg
+        #
         if a_count == 1:
             print_text = my.colored_16(STYLE_NON,FG_YELLOW,BG_BLACK,f"")
         elif a_count == 2:
@@ -1004,11 +1041,20 @@ class MyDb:
         elif a_count == 0 and b_count == 1:
             print_text = my.colored_16(STYLE_NON,FG_BLUE,BG_BLACK,f"")
         #
-        trade = trade.upper()
-        print_text += f"   >{trade}({sym}):{rslt}:{b_count}->{a_count}:"\
-                    + f"seq={seq}:{method:<10}({b_rate:,.3f}):t_rate={t_rate:13,.3f}:"\
-                    + f" {exchange}"
+        print_text += f"   >{msg}"
         print(print_text + self.edit_cont_text(cont, cont_m) + my.colored_reset())
+        #
+        # logwrite msg
+        #
+        self.logwrite(f" :{msg} cont={cont}/{cont_m}")   
         return
+#
+# logout
+#
+    def logwrite(self, msg):
+        timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        self.logfile.write(f"{timestamp}{msg}\n")
+        self.logfile.flush()
+
 
 #eof

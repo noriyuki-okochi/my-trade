@@ -128,24 +128,25 @@ opts = [opt for opt in args ]
 #
 if len(opts) > 1 and opts[1] == '-h':
     print(" --- command ---")
-    print(" -hELP")
-    print(" -tRADE (gmo|coin) <symbol> (buy|sell) <size> [<rate>]")
-    print(" -tRADElOG (gmo|coin) <symbol> (buy|sell) <rate> [<id>]")
-    print(" -cANCLE (gmo|coin) <id>")
-    print(" -bENEFIT (gmo|coin) <symbol> [<from-date>]:[<to-date>]")
-    print(" -uPDATE (trigger|orders|ratelogs) (<key-val>,).. <item> [<value>]")
-    print(" -sUSPEND (<seqnum>,)...")
-    print(" -rESUMU (<seqnum>,)...")
-    print(" -mODIFYrateLogsByOrderRate (gmo|coin) [<symbol>]")
-    print(" -Header [-t|-tb|-ts|-t!] [-i] [-o]")
-    print("    -t|-tb|-ts::update trigger, -i::initialize trigger-count, -o::opens")
+    print(" -h(elp)")
+    print(" -t(rade) (gmo|coin|trigger#) <symbol> (buy|sell) <size> [<rate>]")
+    print(" -t(rade-log) (gmo|coin) <symbol> (buy|sell) <rate> [<id>]")
+    print(" -c(ancel) (gmo|coin) <id>")
+    print(" -b(enefit) (gmo|coin) <symbol> [<from-date>]:[<to-date>]")
+    print(" -u(pdate) (trigger|orders|ratelogs) (<key-val>,).. <item> [<value>]")
+    print(" -s(uspend) (<seqnum>,)...")
+    print(" -r(esume) (<seqnum>,)...")
+    print(" -m(odify rate-Logs by order-rate) (gmo|coin) [<symbol>]")
+    print(" -H(eader) [-t|-tb|-ts|-t!] [-i] [-o]|[-n]")
+    print("    -t|-tb|-ts::update trigger, -i::initialize trigger-count, -o::opens, -n::no contact-log")
     print(" --- option ---")
-    print(" -dELETE([0-9]+)[y|m|d]")
-    print(" -SkipUpdateTrigger")
+    print(" -d(elete)([0-9]+)[y|m|d]")
+    print(" -S(kip update-trigger-list")
     exit()
 #
 dontSampling = False
 showOpens = False
+showContact = True
 updateTrigger = 3
 initTriggerCount = 0
 #
@@ -171,6 +172,8 @@ if len(opts) > 1 and opts[1] == '-H':
         initTriggerCount = 1        # トリガーのcountを現在レートで初期設定する
     if '-o' in opts:                # 未決済の注文を表示する（coincheckのみ）
         showOpens = True
+    if '-n' in opts:                # 約定履歴を表示しない
+        showContact = False
 #
 #
 # テーブルの更新
@@ -321,19 +324,20 @@ if len(opts) > 1 and opts[1] == '-b':
 #    -tl (gmo|coin) <symbol> (buy|sell) <rate> <id>
 #       Input<timestamp>:: Y-m-d H:M:S
 ##
-if len(opts) >= 6 and (opts[1] == '-t' or opts[1] == '-tl'):
+if len(opts) >= 3 and (opts[1] == '-t' or opts[1] == '-tl'):
     exchange = opts[2]
-    symbol = opts[3]
-    side = opts[4]
-    extype = 'MARKET'
-    id = None
-    if opts[1] == '-tl':
-        option = 'l'   
-        rate = opts[5]
-        id =  opts[6]
-    else:        
-        option = 't'
-        size = opts[5]
+    if len(opts) > 5:
+        symbol = opts[3]
+        side = opts[4]
+        extype = 'MARKET'
+        id = None
+        if opts[1] == '-tl':
+            option = 'l'   
+            rate = opts[5]
+            id =  opts[6]
+        else:        
+            option = 't'
+            size = opts[5]
     if exchange in ['coin','gmo']:
         if exchange == 'coin':
             exchange = EXCHANGE_CHECK
@@ -372,6 +376,22 @@ if len(opts) >= 6 and (opts[1] == '-t' or opts[1] == '-tl'):
             if not is_float(rate):
                 illegal = rate
                 exchange = None
+    elif opts[1] == '-t' and exchange.isdecimal():
+        option = 't'
+        # 指定トリガーで実行する場合
+        trigger = db.get_trigger(exchange)
+        if trigger != None:
+            print(f"trigger={trigger}")
+            exchange = trigger['exchange']
+            symbol = trigger['symbol']
+            side = trigger['side']
+            extype = trigger['exectype']
+            size = trigger['amount']      
+            rate = None
+        else:
+            print(f">illegal trigger#[{exchange}]!!")
+            option = 'tt'
+            exchange = None 
     else:
         illegal = exchange
         exchange = None
@@ -404,7 +424,7 @@ if len(opts) >= 6 and (opts[1] == '-t' or opts[1] == '-tl'):
     else:
         if option == 't':
             print(f">illegal argument[{illegal}]!!:  -t (gmo|coin) (btc|eth|iost) (buy|sell) <size> [<rate>]")
-        else:
+        elif option == 'tl':
             print(f">illegal argument[{illegal}]!!:  -tl (gmo|coin) (btc|eth|iost) (buy|sell) <rate> <id>")
     exit()
 #
@@ -566,54 +586,57 @@ for key, item in result.items():
             outstring += f"  ({int(order['rate']*order['amount']):6,})"
         print(outstring)
 #
-# coincheck　未決済の注文
-#
-if showOpens == True:
-    path_orders_opens = '/api/exchange/orders/opens'
-    try:
-        result = coincheck.get(path_orders_opens)
-    except CoinApiError as e:
-        print(e)
-        exit()
-    if result['success'] == True:
-        inum = 1
-        for order in result['orders']:
-            print(f">opens ({inum}):{order['id']} {order['pair']} {order['order_type']} {order['rate']}({order['pending_amount']})")
-            inum += 1
-else:
-#
-# coincheck　最新の約定履歴
-#
-    last_date = last_datetime(recently_order, 'd')
-    last_date_epoch = int(time.mktime(last_date.timetuple()))
-    #print(f"{last_date}->{last_date_epoch}") 
-#path_latest = '/api/exchange/orders/transactions'
-    path_latest = '/api/exchange/orders/transactions_pagination'
-    try:
-        result = coincheck.get(path_latest)
-    except CoinApiError as e:
-        print(e)
-        exit()
-    if result['success'] == True:
-        #print(result)
-        inum = 0
-        for tran in result['data']:
-            at_ary = tran['created_at'].split('T')
-            time_str = at_ary[1].split('.')[0]
-            at_str = at_ary[0] + ' ' + time_str
-            at_datetime = datetime.strptime(at_str, '%Y-%m-%d %H:%M:%S')
-            at_epoch = int(time.mktime(at_datetime.timetuple()))
-            #print(f"{at_str}->{at_epoch}") 
-            if at_epoch >= last_date_epoch:
+# 　最新の約定履歴
+if showContact == True:
+    #
+    # coincheck　未決済の注文
+    #
+    if showOpens == True:
+        path_orders_opens = '/api/exchange/orders/opens'
+        try:
+            result = coincheck.get(path_orders_opens)
+        except CoinApiError as e:
+            print(e)
+            exit()
+        if result['success'] == True:
+            inum = 1
+            for order in result['orders']:
+                print(f">opens ({inum}):{order['id']} {order['pair']} {order['order_type']} {order['rate']}({order['pending_amount']})")
                 inum += 1
-                print(f">latest({inum}):{tran['id']} {tran['pair']} {tran['side']} {tran['rate']}({tran['funds']})")
-        if inum == 0:
-            print('>latest execution none')
+    else:
+        #
+        # coincheck　最新の約定履歴
+        #
+        last_date = last_datetime(recently_order, 'd')
+        last_date_epoch = int(time.mktime(last_date.timetuple()))
+        #print(f"{last_date}->{last_date_epoch}") 
+        #path_latest = '/api/exchange/orders/transactions'
+        path_latest = '/api/exchange/orders/transactions_pagination'
+        try:
+            result = coincheck.get(path_latest)
+        except CoinApiError as e:
+            print(e)
+            exit()
+        if result['success'] == True:
+            #print(result)
+            inum = 0
+            for tran in result['data']:
+                at_ary = tran['created_at'].split('T')
+                time_str = at_ary[1].split('.')[0]
+                at_str = at_ary[0] + ' ' + time_str
+                at_datetime = datetime.strptime(at_str, '%Y-%m-%d %H:%M:%S')
+                at_epoch = int(time.mktime(at_datetime.timetuple()))
+                #print(f"{at_str}->{at_epoch}") 
+                if at_epoch >= last_date_epoch:
+                    inum += 1
+                    print(f">latest({inum}):{tran['id']} {tran['pair']} {tran['side']} {tran['rate']}({tran['funds']})")
+            if inum == 0:
+                print('>latest execution none')
 #
 # GMO-coin　資産残高
 #
 print('-- GMO-coin --                                           -- Latest trade(buy) --')
-names = ['BTC', 'ETH']
+names = ['JPY', 'BTC', 'ETH']
 path_balance = '/v1/account/assets'
 try:
     result = gmocoin.get(path_balance)
@@ -643,52 +666,56 @@ if result['status'] == 0:
 else:
     print('respons status error!!')
 #
-# GMO-coin　最新の約定履歴
-#
-path_latest = '/v1/latestExecutions'
-for sym in names:
-    try:
-        params = { "symbol": sym, "page": 1, "count":100 }
-        result = gmocoin.get(path_latest, params)
-    except CoinApiError as e:
-        print(e)
-        exit()
-    if result['status'] == 0:
-        #print('respons status ok!!')
-        data = result['data']
-        #print(f"{result}")
-        if any(data):   # len(data) != 0
-            lists = data['list']
-            order = { 'id': 0, 'size': 0.0, 'price': 0, 'count': 0}
-            count = 0
-            #print(f"\n")
-            for list in lists:
-                count += 1
-                print(f">latest({count}):{list['orderId']} {list['symbol']:4} {list['side']:4} {list['price']:>9}({list['size']})")
-                if order['id'] == list['orderId']:
-                    order['size'] += float(list['size'])
-                    order['price'] += int(int(list['price'])*float(list['size']))
-                    order['count'] += 1
-                else:
-                    if order['id'] != 0:
-                        # 同じ注文IDの約定レートの加重平均で更新する
-                        rate = order['price']/(order['size'])
-                        db.update_orderRate(order['id'], rate)
-                    #
-                    order['id'] = list['orderId'] 
-                    order['size'] = float(list['size']) 
-                    order['price'] = int(int(list['price'])*float(list['size']))
-                    order['count'] = 1 
-            # 
-            if order['id'] != 0:
-                # 同じ注文IDの約定レートの加重平均で更新する
-                rate = order['price']/(order['size'])
-                db.update_orderRate(order['id'], rate)
-            #
+# 　最新の約定履歴
+if showContact == True:
+    #
+    # GMO-coin　最新の約定履歴
+    #
+    path_latest = '/v1/latestExecutions'
+    names = ['BTC', 'ETH']
+    for sym in names:
+        try:
+            params = { "symbol": sym, "page": 1, "count":100 }
+            result = gmocoin.get(path_latest, params)
+        except CoinApiError as e:
+            print(e)
+            exit()
+        if result['status'] == 0:
+            #print('respons status ok!!')
+            data = result['data']
+            #print(f"{result}")
+            if any(data):   # len(data) != 0
+                lists = data['list']
+                order = { 'id': 0, 'size': 0.0, 'price': 0, 'count': 0}
+                count = 0
+                #print(f"\n")
+                for list in lists:
+                    count += 1
+                    print(f">latest({count}):{list['orderId']} {list['symbol']:4} {list['side']:4} {list['price']:>9}({list['size']})")
+                    if order['id'] == list['orderId']:
+                        order['size'] += float(list['size'])
+                        order['price'] += int(int(list['price'])*float(list['size']))
+                        order['count'] += 1
+                    else:
+                        if order['id'] != 0:
+                            # 同じ注文IDの約定レートの加重平均で更新する
+                            rate = order['price']/(order['size'])
+                            db.update_orderRate(order['id'], rate)
+                        #
+                        order['id'] = list['orderId'] 
+                        order['size'] = float(list['size']) 
+                        order['price'] = int(int(list['price'])*float(list['size']))
+                        order['count'] = 1 
+                # 
+                if order['id'] != 0:
+                    # 同じ注文IDの約定レートの加重平均で更新する
+                    rate = order['price']/(order['size'])
+                    db.update_orderRate(order['id'], rate)
+                #
+            else:
+                print('>latest execution none')
         else:
-            print('>latest execution none')
-    else:
-        print('>respons status error!!')
+            print('>respons status error!!')
 #
 #
 if dontSampling:
