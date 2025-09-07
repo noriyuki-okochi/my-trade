@@ -144,6 +144,7 @@ else:
     if macd_flg == True :
         fig = make_subplots(rows=2, cols=1, vertical_spacing=0.2,
                         subplot_titles=[selsyms[0].upper(),'MACD'],
+                        shared_xaxes=True,
                         specs=[[{"secondary_y": False}], [{"secondary_y": True}]])
     elif predict_flg == True:
         fig = make_subplots(rows=2, cols=1, vertical_spacing=0.2,
@@ -196,6 +197,18 @@ for sym in coin_symbols:
         # MACD,SIGNAL
         mdfil["macd"] = mdfil["ema12"] - mdfil["ema26"]
         mdfil["signal"] = mdfil["macd"].ewm(span=9,adjust=False).mean()
+        # Volatility
+        '''
+        mdfil["max"] = mdfil["High"].rolling(window=prd_volat).max()
+        mdfil["volat"] = mdfil["max"] - mdfil["Low"].rolling(window=prd_volat).min()
+        mdfil["volat"] = mdfil["volat"] / mdfil["max"]
+        '''
+        mdfil["volat"] = mdfil["High"] - mdfil["Low"]
+        mdfil["volat"] = mdfil["volat"] / mdfil["Open"]
+        '''
+        mdfil["volat"] = (mdfil["High"] - mdfil["Low"])/mdfil["Open"]
+        mdfil["volsma"] = mdfil["volat"].rolling(window=prd_volat).mean()
+        '''
         #
         # select diaplay datas
         #
@@ -417,6 +430,26 @@ for sym in coin_symbols:
                             row = 2, 
                             col = 1   
                         )
+            #volatility
+            fig = fig.add_trace( go.Bar(x=mdfil.index, 
+                                name="volatility",
+                                y=mdfil["volat"], 
+                                marker_color= 'yellow'),
+                        secondary_y=True,
+                        row = 2, 
+                        col = 1   
+                    )
+            
+            '''
+            fig = fig.add_trace( go.Scatter(x=mdfil.index, 
+                                    name="sma",
+                                    y=mdfil["volsma"], 
+                                    line_color= 'cyan',
+                                    mode="lines"),
+                            row = 2, 
+                            col = 1   
+                        )
+            
             #ptc_change
             for col_name, itemSer in mdfil.items():
                 #print(f"{col_name}, {idx_change}")
@@ -435,6 +468,7 @@ for sym in coin_symbols:
                         )
             else:
                 print(f"{idx_change} is not found in columns")
+            '''
         #
         # < Permutation Importance >
         if predict_flg == True and macd_flg == False:
@@ -495,6 +529,7 @@ else:
         #fig.update_xaxes(showticklabels = False)
     if macd_flg == True or predict_flg == True:
         fig.update(layout_xaxis_rangeslider_visible=False)
+        fig.update(layout_xaxis_showticklabels = True)
         fig.update(layout_xaxis2_showticklabels = False)
         if macd_flg == True:
             fig.update_layout(
@@ -504,9 +539,10 @@ else:
                 yaxis2= dict(title='EMA', side='left'), 
                 showlegend = True
             )
-            titleStr = idx_change.upper() + "-change(%)"
+            #titleStr = idx_change.upper() + "-change(%)"
+            titleStr = 'Volatility(%)'
             fig.update_yaxes(title_text=titleStr, showgrid=False, 
-                             range=(-0.02, 0.04), secondary_y=True, 
+                             range=(0.0, 0.05), secondary_y=True, 
                              row=2, col=1)
             fig.update_traces(dict(showlegend = False), row=2, col=1)
         elif predict_flg == True:

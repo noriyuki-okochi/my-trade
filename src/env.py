@@ -155,6 +155,18 @@ if pct_change == None:
     pct_change_l = ['0.001', '0.002', '0.003', '0.004']
 else:
     pct_change_l = pct_change.split(',')
+#
+prd_volat = os.getenv('PRD_VOLAT')
+if prd_volat == None:
+    prd_volat = 50
+else:
+    prd_volat = int(prd_volat)
+pct_volat = os.getenv('PCT_VOLAT')
+if pct_volat == None:
+    pct_volat = ['0.05', '0.1', '0.003', '0.004']
+else:
+    pct_volat = pct_volat.split(',')
+
 # 注文ID
 #order_id = None
 # 購入金額

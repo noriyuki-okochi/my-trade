@@ -12,15 +12,17 @@ from datetime import datetime
 # Private API Class for sqlite3from env import *
 #
 class MyDb:
-    def __init__(self, dbpath='../Auto-trade.db'):
+    def __init__(self, dbpath='../Auto-trade.db', logwrite = False):
         self.dbpath = dbpath
         self.conn = sqlite3.connect(dbpath)
         self.conn.row_factory = sqlite3.Row
         self.cur = self.conn.cursor()
-        timestamp = datetime.now().strftime('%Y%m%d')
-        self.logfile = open(dbpath[:dbpath.rfind('/')+1] + f"log{timestamp}.txt", 'a')
-        #self.logfile.write(f"DB opened: {dbpath}\n")
-        #self.logfile.flush()
+        self.logfile = None
+        if logwrite:
+            timestamp = datetime.now().strftime('%Y%m%d')
+            self.logfile = open(dbpath[:dbpath.rfind('/')+1] + f"log{timestamp}.txt", 'a')
+            #self.logfile.write(f"DB opened: {dbpath}\n")
+            #self.logfile.flush()
 
     def rollback(self):
         self.conn.rollback()
@@ -652,7 +654,7 @@ class MyDb:
         b_rate = 0.0
         count = countA = 0
         hist_cont_m = int(hist_cont_l_s[auto_coin_symbols.index(symbol)])
-        pct_change_m = float(pct_change_l[auto_coin_symbols.index(symbol)])
+        pct_volat_m = float(pct_volat[auto_coin_symbols.index(symbol)])
         #
         for rs in rsAry:
             seqnum = rs['seqnum']
@@ -795,7 +797,7 @@ class MyDb:
         method = ''
         b_rate = 0.0
         hist_cont_m = int(hist_cont_l_b[auto_coin_symbols.index(symbol)])
-        pct_change_m = float(pct_change_l[auto_coin_symbols.index(symbol)])
+        pct_volat_m = float(pct_volat[auto_coin_symbols.index(symbol)])
         #
         for rs in rsAry:
             seqnum = rs['seqnum']
@@ -943,11 +945,17 @@ class MyDb:
         mdfil["macd"] = mdfil["ema12"] - mdfil["ema26"]
         mdfil["signal"] = mdfil["macd"].ewm(span=9,adjust=False).mean()
         # 
+        # Volatility
+        mdfil["max"] = mdfil["High"].rolling(window=prd_volat).max()
+        mdfil["volat"] = mdfil["max"] - mdfil["Low"].rolling(window=prd_volat).min()
+        mdfil["volat"] = mdfil["volat"] / mdfil["max"]
+        '''
         for col_name, itemSer in mdfil.items():
             if col_name == idx_change:
                 mdfil["pct"] = itemSer
                 mdfil["pct"] = mdfil["pct"].pct_change(prd_change).fillna(method = 'bfill')
 
+        '''        
         # get Series from DataFrame and latest datas.
         macdSer = mdfil["macd"]
         signalSer = mdfil["signal"]
@@ -958,13 +966,16 @@ class MyDb:
         upper = samSer[-1] + stdSer[-1] * 2 
         lower = samSer[-1] - stdSer[-1] * 2 
         #
+        volatSer = mdfil["volat"]
+        '''
         if 'pct' in mdfil.columns:
             pctSer = mdfil["pct"]
         else:
             pctSer = None
             print(f"{idx_change} is not found in columns")
+        '''
         #
-        return { 'histgram': histgram, 'upper':upper, 'lower':lower, 'std':stdSer[-1], 'pct':pctSer[-1] }
+        return { 'histgram': histgram, 'upper':upper, 'lower':lower, 'std':stdSer[-1], 'volat':volatSer[-1] }
 #
 # delete the rate-logs before the specified datetime.
 #
@@ -992,12 +1003,12 @@ class MyDb:
             print_text = f"   >hist={sign['histgram']:12.3f},"
 
         print_text += f" std={sign['std']:12.3f}, "\
-                   + f"upper={sign['upper']:12.3f}, lower={sign['lower']:12.3f}, pct={sign['pct']:.4f}"
+                   + f"upper={sign['upper']:12.3f}, lower={sign['lower']:12.3f}, volat={sign['volat']:.4f}"
         print(print_text)
         #
         # logwrite
         # 
-        print_text = f" >hist={sign['histgram']:12.3f}, pct={sign['pct']:.4f}"
+        print_text = f" >hist={sign['histgram']:12.3f}, volat={sign['volat']:.4f}"
         self.logwrite(print_text)   
         return
 
@@ -1052,9 +1063,10 @@ class MyDb:
 # logout
 #
     def logwrite(self, msg):
-        timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        self.logfile.write(f"{timestamp}{msg}\n")
-        self.logfile.flush()
+        if self.logfile is not None:
+            timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            self.logfile.write(f"{timestamp}{msg}\n")
+            self.logfile.flush()
 
 
 #eof

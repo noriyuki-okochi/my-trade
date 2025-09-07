@@ -49,7 +49,8 @@ secret_key = SECRET_KEY_GMO
 gmocoin = GmoCoin(access_key, secret_key)
 #        
 # connect AUto-trade.db
-db = MyDb(DB_PATH)
+#
+db = MyDb(DB_PATH, True)
 #
 # 取引最小単位（小数点以下桁数）
 #  
@@ -137,16 +138,16 @@ if len(opts) > 1 and opts[1] == '-h':
     print(" -s(uspend) (<seqnum>,)...")
     print(" -r(esume) (<seqnum>,)...")
     print(" -m(odify rate-Logs by order-rate) (gmo|coin) [<symbol>]")
-    print(" -H(eader) [-t|-tb|-ts|-t!] [-i] [-o]|[-n]")
-    print("    -t|-tb|-ts::update trigger, -i::initialize trigger-count, -o::opens, -n::no contact-log")
+    print(" -H(eader) [-t|-tb|-ts|-t!] [-i] [-o|-n]")
+    print("    -t|-tb|-ts::update trigger, -i::initialize trigger-count, -o::opens, -n::no contract-log")
     print(" --- option ---")
     print(" -d(elete)([0-9]+)[y|m|d]")
-    print(" -S(kip update-trigger-list")
+    print(" -S(kip update-trigger-list)")
     exit()
 #
 dontSampling = False
 showOpens = False
-showContact = True
+showContract = True
 updateTrigger = 3
 initTriggerCount = 0
 #
@@ -173,7 +174,7 @@ if len(opts) > 1 and opts[1] == '-H':
     if '-o' in opts:                # 未決済の注文を表示する（coincheckのみ）
         showOpens = True
     if '-n' in opts:                # 約定履歴を表示しない
-        showContact = False
+        showContract = False
 #
 #
 # テーブルの更新
@@ -291,7 +292,7 @@ if len(opts) > 1 and opts[1] == '-b':
             else:
                 exchange = 'coincheck'
             #
-            if symbol in ['btc', 'iost']:
+            if symbol in ['btc', 'iost', 'eth']:
                 idx = 1
                 crate = None
                 for sym in coins:
@@ -585,9 +586,10 @@ for key, item in result.items():
         if  order != None:
             outstring += f"  ({int(order['rate']*order['amount']):6,})"
         print(outstring)
+input('>push any key to continue:')
 #
 # 　最新の約定履歴
-if showContact == True:
+if showContract == True:
     #
     # coincheck　未決済の注文
     #
@@ -667,7 +669,7 @@ else:
     print('respons status error!!')
 #
 # 　最新の約定履歴
-if showContact == True:
+if showContract == True:
     #
     # GMO-coin　最新の約定履歴
     #
