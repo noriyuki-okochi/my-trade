@@ -19,19 +19,19 @@ ORDER_AMOUNT=50000
 # DX/GX判定時のヒストグラム連続増減カウント
 #
 #HIST_CONTINUING=4
-HIST_CONTINUING_B="5,5,3,5"
+HIST_CONTINUING_B="5,6,3,5"
 HIST_CONTINUING_S="5,4,3,5"
 #
 # 変化率の判定指標
 #
 #IDX_CHANGE="ema26"
-IDX_CHANGE="sma25"
-PRD_CHANGE=1
-PCT_CHANGE="0.001,0.002,0.003,0.004"
+IDX_CHANGE="sma25"      # 対象データ列
+PRD_CHANGE=1            # 変化率算出期間
+PCT_CHANGE="0.001,0.002,0.003,0.004"    # 変化率閾値
 #
-# Volatility変化率の判定指標
-PRD_VOLAT=3
-PCT_VOLAT="0.040,0.098,0.003,0.004"
+# Volatility移動平均の判定指標
+PRD_VOLAT=5             # 移動平均算出期間
+PCT_VOLAT="0.01,0.01,0.01,0.01"         # 変動率閾値
 #
 # 売買自動取引トリガー
 #
@@ -103,8 +103,8 @@ IOST_SELL_RATE="$IOST_SELL_RATE 0.85!im:coincheck:20688.0"
 #<target-rate>マイナス時の比較基準レート
 #
 #BTC_STD_RATE=15900000.0
-BTC_STD_RATE=16500000.0
-ETH_STD_RATE=652000.0
+BTC_STD_RATE=18150000.0
+ETH_STD_RATE=640000.0
 #IOST_STD_RATE=1.14
 IOST_STD_RATE=0.60
 MATIC_STD_RATE=60.0

@@ -205,6 +205,7 @@ for sym in coin_symbols:
         '''
         mdfil["volat"] = mdfil["High"] - mdfil["Low"]
         mdfil["volat"] = mdfil["volat"] / mdfil["Open"]
+        mdfil["volsma"] = mdfil["volat"].rolling(window=prd_volat).mean()
         '''
         mdfil["volat"] = (mdfil["High"] - mdfil["Low"])/mdfil["Open"]
         mdfil["volsma"] = mdfil["volat"].rolling(window=prd_volat).mean()
@@ -432,8 +433,8 @@ for sym in coin_symbols:
                         )
             #volatility
             fig = fig.add_trace( go.Bar(x=mdfil.index, 
-                                name="volatility",
-                                y=mdfil["volat"], 
+                                name="volatility_sma",
+                                y=mdfil["volsma"], 
                                 marker_color= 'yellow'),
                         secondary_y=True,
                         row = 2, 

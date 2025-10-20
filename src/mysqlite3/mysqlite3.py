@@ -736,7 +736,9 @@ class MyDb:
                         else:
                             cont = 0
                         hist = sign['histgram']
-                        if ( hist <= 0 or (hist > 0 and cont >= hist_cont_m)):
+                        volat = sign['volat']
+                        if ( hist <= 0 or (hist > 0 and cont >= hist_cont_m) and \
+                             not (b_rate == 0.0 and volat < pct_volat_m) ):
                             # デッドクロスを超えた、又は指定回数連続してヒストグラムの減少
                             countA = 2
                             rs['target'] = t_rate
@@ -878,9 +880,11 @@ class MyDb:
                         else:
                             cont = 0
                         hist = sign['histgram']
-                        #pct = sign['pct']
+                        volat = sign['volat']
+                       #pct = sign['pct']
                         #if ( hist >= 0 or (hist < 0 and cont >= hist_cont_m and pct >= 0.0)):
-                        if ( hist >= 0 or (hist < 0 and cont >= hist_cont_m) ):
+                        if ( hist >= 0 or (hist < 0 and cont >= hist_cont_m) and \
+                            not (b_rate == 0.0 and volat < pct_volat_m) ):
                             # ゴールデンクロスを超えた、又は指定回数連続してヒストグラムの減少
                             countA = 2
                             ret = rs      # 「買い」の実行トリガー 
@@ -946,13 +950,15 @@ class MyDb:
         mdfil["signal"] = mdfil["macd"].ewm(span=9,adjust=False).mean()
         # 
         # Volatility
-        mdfil["max"] = mdfil["High"].rolling(window=prd_volat).max()
-        mdfil["volat"] = mdfil["max"] - mdfil["Low"].rolling(window=prd_volat).min()
-        mdfil["volat"] = mdfil["volat"] / mdfil["max"]
+        mdfil["volat"] = mdfil["High"] - mdfil["Low"]
+        mdfil["volat"] = mdfil["volat"] / mdfil["Open"]
+        mdfil["vsma"] = mdfil["volat"].rolling(window=prd_volat).mean()
+
         '''
         for col_name, itemSer in mdfil.items():
             if col_name == idx_change:
                 mdfil["pct"] = itemSer
+                # 変化率の計算
                 mdfil["pct"] = mdfil["pct"].pct_change(prd_change).fillna(method = 'bfill')
 
         '''        
@@ -966,7 +972,7 @@ class MyDb:
         upper = samSer[-1] + stdSer[-1] * 2 
         lower = samSer[-1] - stdSer[-1] * 2 
         #
-        volatSer = mdfil["volat"]
+        volatSer = mdfil["vsma"]
         '''
         if 'pct' in mdfil.columns:
             pctSer = mdfil["pct"]
