@@ -923,7 +923,7 @@ class MyDb:
             sql ="select * from ratelogs where symbol = :sym"
         if params['limit'] > 0:
             sql += " LIMIT :limit"
-        # return pandas.read_sql_query(sql, con=self.conn, params=params)
+        #print(f"pandas_read_ratelogs:{params}:{sql}")
         return pandas.read_sql_query(sql, con=self.conn, index_col='inserted_at',\
                                      parse_dates=('inserted_at'), params=params)
 #
@@ -1074,5 +1074,196 @@ class MyDb:
             self.logfile.write(f"{timestamp}{msg}\n")
             self.logfile.flush()
 
+###############################################################################################################
+# delete the trade_history.
+#
+    def delete_trade_history(self, exchange: str):
+        if exchange == 'coincheck':
+            table_name = 'coincheck_trade_history'
+        elif exchange == 'gmocoin':
+            table_name = 'gmocoin_trade_history'
+        else:
+            print(f"[delete_trade_history]error: exchange '{exchange}' not supported.")
+            return False
+        
+        sql = f"delete from {table_name}"
+        print(sql)
+        self.cur.execute(sql)
+        self.conn.commit()
+        return True
+#
+# agregate the sales_history.
+#
+    def agregate_trade_sales(self, exchange: str):
+        cond_str = None
+        if exchange == 'coincheck':
+            table_name = 'coincheck_trade_history'
+            sel_items = "通貨ペア as symbol,取引種別 as side,SUM(増加数量) as in_amount,SUM(減少数量) as out_amount,SUM(手数料数量) as fee"
+            grp_items = "通貨ペア,取引種別"
+            cond_str = "取引種別 in ('購入','売却')"
+        elif exchange == 'gmocoin':
+            table_name = 'gmocoin_trade_history'
+            sel_items = "銘柄名 as symbol,売買区分 as side,SUM(約定数量) as amount,SUM(約定金額) as jpy,SUM(注文手数料) as fee"
+            grp_items = "銘柄名,売買区分"
+            cond_str = "売買区分 is not null"
+        else:
+            print(f"[agregate_trade_history]error: exchange '{exchange}' not supported.")
+            return False
+        #
+        sql = f"SELECT {sel_items} FROM {table_name} WHERE {cond_str} GROUP BY {grp_items}"
+        #print(sql)
+        return pandas.read_sql_query(sql, con=self.conn)
 
+#
+# agregate the otheres_history.
+#
+    def agregate_trade_otheres(self, exchange: str):
+        cond_str = None
+        if exchange == 'coincheck':
+            table_name = 'coincheck_trade_history'
+            sel_items = "増加通貨名 as symbol,取引種別 as side,SUM(増加数量) as in_amount"
+            grp_items = "増加通貨名,取引種別"
+            cond_str = "取引種別 in ('受取')"
+        elif exchange == 'gmocoin':
+            table_name = 'gmocoin_trade_history'
+            sel_items = "銘柄名 as symbol,授受区分 as side,SUM(数量) as amount"
+            grp_items = "銘柄名,授受区分"
+            cond_str = "精算区分 in ('暗号資産預入・送付')"
+        else:
+            print(f"[agregate_trade_history]error: exchange '{exchange}' not supported.")
+            return False
+        #
+        sql = f"SELECT {sel_items} FROM {table_name} WHERE {cond_str} GROUP BY {grp_items}"
+        #print(sql)
+        return pandas.read_sql_query(sql, con=self.conn)
+#
+# gmo_return_fee.
+#
+    def gmo_return_fee(self):
+        cond_str = None
+        table_name = 'gmocoin_trade_history'
+        sel_items = "銘柄名 as symbol,精算区分,SUM(日本円受渡金額) as jpy"
+        grp_items = "銘柄名,精算区分"
+        cond_str = "精算区分 in ('取引所現物 取引手数料返金')"
+        #
+        sql = f"SELECT {sel_items} FROM {table_name} WHERE {cond_str} GROUP BY {grp_items}"
+        #print(sql)
+        return pandas.read_sql_query(sql, con=self.conn)
+#
+# read account_statement.
+#    
+    def pandas_read_account(self, key_t: tuple):
+        exchange, symbol, year = key_t
+        sql =f"select * from account_statement where account_year={year} and symbol='{symbol}' and exchange='{exchange}'"
+        print(sql)
+        return pandas.read_sql_query(sql, con=self.conn)
+
+#
+# update account_statement.
+#    
+    def update_account_statement(self, key_t: tuple, data_d):
+        ex, sym, year = key_t
+        table_name = 'account_statement'
+        sql = f"update {table_name} set "\
+              f" buy_amount = {data_d['buy_amount']},"\
+              f" buy_jpy = {data_d['buy_jpy']},"\
+              f" sell_amount = {data_d['sell_amount']},"\
+              f" sell_jpy = {data_d['sell_jpy']},"\
+              f" receipt_amount = {data_d['receipt_amount']},"\
+              f" receipt_jpy = {data_d['receipt_jpy']},"\
+              f" send_amount = {data_d['send_amount']},"\
+              f" send_jpy = {data_d['send_jpy']},"\
+              f" e_carry_amount = {data_d['e_carry_amount']},"\
+              f" e_carry_jpy = {data_d['e_carry_jpy']},"\
+              f" average_unit = {data_d['average_unit']},"\
+              f" sale_proceeds = {data_d['sale_proceeds']},"\
+              f" sale_costs = {data_d['sale_costs']},"\
+              f" fee = {data_d['fee']},"\
+              f" income = {data_d['income']},"\
+              f" note = '{data_d['note']}'"
+        sql += f" where account_year = {year} and symbol = '{sym}' and exchange = '{ex}'"              
+        print(sql)
+        self.cur.execute(sql)
+        self.conn.commit()
+        return 
+#    
+# insert daily candlelogs.
+# 
+    def insert_candlelogs(self, symbol: str, last_date = None):
+        params = {"sym": symbol.lower(), "limit": 0}
+        #
+        df = self.pandas_read_ratelogs(params)
+        # convert to OHLC
+        mdf = df['rate'].resample('D').ohlc()
+        mdf.columns = ['open_rate', 'high_rate', 'low_rate', 'close_rate']
+        mdfil = mdf.fillna(method = 'ffill',inplace = False)
+        mdfil['symbol'] = symbol.upper()
+        mdfil = mdfil.sort_index(ascending=True)
+        if last_date is not None:
+            mdfil = mdfil[mdfil.index < last_date]
+        if mdfil.shape[0] == 0:
+            print(f"insert_candlelogs:No new data to insert for {symbol}.")
+        else:
+            mdfil.to_sql('candlelogs', self.conn, if_exists='append', index='inserted_at', method='multi', chunksize=1024)
+            print(f"insert_candlelogs: {mdfil.shape[0]} new data to insert for {symbol}.")
+        return mdfil.shape[0]
+#
+# calcurate jpy of otheres
+#
+    def calc_otheres_jpy(self, exchange: str, symbol: str, side: str):
+        jpy = 0
+        table2 = "candlelogs as t2"
+        if exchange == 'coincheck':
+            sel_item = "SUM(増加数量*close_rate) as jpy, SUM(増加数量) as amt"
+            table1 = 'coincheck_trade_history as t1'
+            on_str = "t1.増加通貨名 = t2.symbol AND DATE(replace(t1.取引日時,'/','-')) = DATE(t2.inserted_at)"
+            cond_str = f"t1.取引種別 in ('{side}') and t1.増加通貨名='{symbol}' GROUP BY t1.増加通貨名"
+        elif exchange == 'gmocoin':
+            sel_item = "SUM(数量*close_rate) as jpy, SUM(数量) as amt"
+            table1 = "gmocoin_trade_history as t1"
+            on_str = "t1.銘柄名 = t2.symbol AND DATE(replace(t1.日時,'/','-')) = DATE(t2.inserted_at)"
+            cond_str = f"t1.授受区分 in ('{side}') and t1.銘柄名='{symbol}' GROUP BY t1.銘柄名"
+    #
+        sql = f"SELECT {sel_item} FROM {table1} LEFT JOIN {table2} ON {on_str} WHERE {cond_str}"
+        #print(sql)
+        rs = self.cur.execute(sql).fetchone()
+        if rs != None:
+            jpy = rs['jpy']
+            amt = rs['amt']
+            print(f"calc_otheres_jpy:{exchange}:{symbol}:{side}:jpy={jpy}(amt={amt}, rate={jpy/amt if amt != 0 else 0:,.3f})")
+        return jpy
+#
+# delete table-records
+#
+    def delete_trade_accounts_records(self, table, key_t):
+        year, ex, sym = key_t
+        cond_str = ''
+        if ex != '*':
+            cond_str = f"exchange='{ex}'"
+        if sym != '*':
+            if cond_str != '': cond_str += ' and '
+            cond_str += f"symbol='{sym}'" 
+        if year != '*':
+            if cond_str != '': cond_str += ' and '
+            if table ==  'account_statement':
+                cond_str += f"account_year={year}"
+            elif table ==  'candlelogs':
+                cond_str += f"strftime('%Y',inserted_at)='{year}'"
+            elif table == 'coincheck_trade_history':
+                cond_str += f"strftime('%Y',replace(取引日時,'/','-'))='{year}'"
+            elif table == 'gmocoin_trade_history':
+                cond_str += f"strftime('%Y',replace(日時,'/','-'))='{year}'"
+                
+        if len(cond_str) > 0:
+            cond_str = f" where {cond_str}"
+        #
+        sql = f"delete from {table} {cond_str}"
+        print(sql)
+        print(f"Are you sure?[y/n].")
+        ans = input('>')
+        if ans == 'y':
+            self.cur.execute(sql)
+            self.conn.commit()
+        return
 #eof
+# 

@@ -8,7 +8,7 @@ create table if not exists balance( exchange text NOT NULL,
                                     PRIMARY KEY(exchange,symbol)
                                 );
 --
-drop table if exists trigger;
+--drop table if exists trigger;
 create table if not exists trigger( seqnum integer PRIMARY KEY,
                                     symbol text NOT NULL,
                                     trade text NOT NULL,
@@ -44,4 +44,14 @@ create table if not exists ratelogs( seqnum integer PRIMARY KEY AUTOINCREMENT,
                                     rate real, 
                                     inserted_at TIMESTAMP DEFAULT(DATETIME('now','localtime')),
                                     time_epoch integer
+                                );
+--
+--drop table if exists candlelogs;
+create table if not exists candlelogs( inserted_at text NOT NULL,
+                                    symbol text NOT NULL,
+                                    open_rate real,
+                                    high_rate real,
+                                    low_rate real,
+                                    close_rate real,
+                                    PRIMARY KEY (inserted_at, symbol)
                                 );
