@@ -521,6 +521,10 @@ if delval != None:
     last_date = last_datetime(delval, delopt) 
     db.delete_ratelogs(last_date)
     print(f"the rate-logs before {last_date} have deleted now.")
+    # 自動取引用ローソク足データ登録
+    #if dontSampling == False:
+    for sym in auto_coin_symbols:
+        db.insert_candlelogs(sym, last_date)
 #
 # 自動取引のトリガー（レート値）登録
 #
