@@ -1173,6 +1173,8 @@ class MyDb:
               f" receipt_jpy = {data_d['receipt_jpy']},"\
               f" send_amount = {data_d['send_amount']},"\
               f" send_jpy = {data_d['send_jpy']},"\
+              f" f_carry_amount = {data_d['f_carry_amount']},"\
+              f" f_carry_jpy = {data_d['f_carry_jpy']},"\
               f" e_carry_amount = {data_d['e_carry_amount']},"\
               f" e_carry_jpy = {data_d['e_carry_jpy']},"\
               f" average_unit = {data_d['average_unit']},"\
@@ -1216,12 +1218,12 @@ class MyDb:
         if exchange == 'coincheck':
             sel_item = "SUM(増加数量*close_rate) as jpy, SUM(増加数量) as amt"
             table1 = 'coincheck_trade_history as t1'
-            on_str = "t1.増加通貨名 = t2.symbol AND DATE(replace(t1.取引日時,'/','-')) = DATE(t2.inserted_at)"
+            on_str = "t1.増加通貨名 = t2.symbol AND DATE(t1.取引日時) = DATE(t2.inserted_at)"
             cond_str = f"t1.取引種別 in ('{side}') and t1.増加通貨名='{symbol}' GROUP BY t1.増加通貨名"
         elif exchange == 'gmocoin':
             sel_item = "SUM(数量*close_rate) as jpy, SUM(数量) as amt"
             table1 = "gmocoin_trade_history as t1"
-            on_str = "t1.銘柄名 = t2.symbol AND DATE(replace(t1.日時,'/','-')) = DATE(t2.inserted_at)"
+            on_str = "t1.銘柄名 = t2.symbol AND DATE(t1.日時) = DATE(t2.inserted_at)"
             cond_str = f"t1.授受区分 in ('{side}') and t1.銘柄名='{symbol}' GROUP BY t1.銘柄名"
     #
         sql = f"SELECT {sel_item} FROM {table1} LEFT JOIN {table2} ON {on_str} WHERE {cond_str}"
@@ -1250,9 +1252,9 @@ class MyDb:
             elif table ==  'candlelogs':
                 cond_str += f"strftime('%Y',inserted_at)='{year}'"
             elif table == 'coincheck_trade_history':
-                cond_str += f"strftime('%Y',replace(取引日時,'/','-'))='{year}'"
+                cond_str += f"strftime('%Y',取引日時)='{year}'"
             elif table == 'gmocoin_trade_history':
-                cond_str += f"strftime('%Y',replace(日時,'/','-'))='{year}'"
+                cond_str += f"strftime('%Y',日時)='{year}'"
                 
         if len(cond_str) > 0:
             cond_str = f" where {cond_str}"

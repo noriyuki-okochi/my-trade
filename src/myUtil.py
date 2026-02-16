@@ -125,6 +125,11 @@ def import_trade_history(db:MyDb, exchange:str):
     df = pd.read_csv(csvfile)
     print(f"[import_trade_history]:read_csv:{df.shape}")
     
+    #取引日時のフォーマット変換（'2023/1/1 12:00' -> '2023-01-01 12:00' ）
+    for i in  range(df.shape[0]):
+        date_time:list = df.iat[i, 0].split(' ')      # 2023/1/1 12:00
+        ymd:list = date_time[0].split('/')            # 2023/1/1
+        df.iat[i, 0] = f"{ymd[0]}-{int(ymd[1]):02}-{int(ymd[2]):02} {date_time[1]}"
     # DBへ履歴データ登録
     #db.delete_tracking_data()      # 登録済データの削除
     df.to_sql(table_name, db.conn, if_exists='append', index=None, method='multi', chunksize=1024)
@@ -400,6 +405,11 @@ def main():
                 data_d = agregate_trade_gmo(db, key_t) 
                        
             if data_d is not None:
+                # 前年度繰越金を繰り入れ
+                account_df: pd = db.pandas_read_account( (exchange, symbol, year - 1) )
+                if  not account_df.empty:
+                    data_d['f_carry_amount'] = account_df.iat[0, 13]    #'e_carry_amount'
+                    data_d['f_carry_jpy'] = account_df.iat[0, 14]       #'e_carry_jpy')
                 print(f">> {exchange} account statement({symbol}:{year}) aggregated.")
                 # 所得金額の計算
                 data_d = calc_account_statement(data_d)
