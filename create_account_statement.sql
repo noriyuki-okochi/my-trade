@@ -1,0 +1,26 @@
+--drop table if exists account_statement;
+create table if not exists account_statement(  
+                                    account_year integer NOT NULL,
+                                    symbol text NOT NULL,
+                                    exchange text NOT NULL,
+                                    buy_amount real DEFAULT 0.0, 
+                                    buy_jpy integer DEFAULT 0.0,
+                                    sell_amount real DEFAULT 0.0,   
+                                    sell_jpy integer DEFAULT 0.0, 
+                                    receipt_amount real DEFAULT 0.0,   
+                                    receipt_jpy integer DEFAULT 0.0,   
+                                    send_amount real DEFAULT 0.0, 
+                                    send_jpy integer DEFAULT 0.0, 
+                                    f_carry_amount real DEFAULT 0.0, 
+                                    f_carry_jpy integer DEFAULT 0.0, 
+                                    e_carry_amount real DEFAULT 0.0, 
+                                    e_carry_jpy integer DEFAULT 0.0, 
+                                    average_unit real DEFAULT 0.0, 
+                                    sale_proceeds integer DEFAULT 0.0, 
+                                    sale_costs integer DEFAULT 0.0, 
+                                    fee integer DEFAULT 0.0, 
+                                    income integer DEFAULT 0.0, 
+                                    note text DEFAULT '',
+                                    created_at TIMESTAMP DEFAULT(DATETIME('now','localtime')),
+                                    PRIMARY KEY(account_year, symbol, exchange)
+                                );
