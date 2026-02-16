@@ -1,0 +1,5 @@
+account_year,symbol,exchange,buy_amount,buy_jpy,sell_amount,sell_jpy,receipt_amount,receipt_jpy,send_amount,send_jpy,f_carry_amount,f_carry_jpy,e_carry_amount,e_carry_jpy,average_unit,sale_proceeds,sale_costs,fee,income,note
+2024,IOST,coincheck,104677.89,129246,237801.90,304193,0.0,0,0.0,0,138896.0,497674,5771.99,14856,3,304193,612064,200,-308072,令和６年
+2024,BTC,coincheck,0.04,563354,0.03,393563,0.0,0,0.0,0,0.0,0,0.01,170703,14228156,393563,392651,0,911,令和６年
+2024,BTC,gmocoin,0.30,3073347,0.29,3009119,0.0,0,0.0,0,0.0,11761,0.01,102088,10208829,3009119,2983020,3022,23077,令和６年
+2024,ETH,gmocoin,0.16,87890,0.0,0,0.0,0,0.0,0,0.0,3,0.16,87893,549331,0,0,46,-46,令和６年
