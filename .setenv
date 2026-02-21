@@ -4,7 +4,7 @@
 SLEEP_DAYS=7                # レートサンプリング継続（プログラムの生存）日数
 BLINK_RATE=1.5              # レートブリンク表示閾値（変動率%）
 MAIL_RATE=2.0               # レート警告メイル送信閾値（変動率%：MAIL_RATE>=BLINK_RATE）
-DEL_SPAN_VALUE=1            # レートログの保存期間
+DEL_SPAN_VALUE=2            # レートログの保存期間
 DEL_SPAN_OPT="y"            # レートログの保存期間単位('y'|'m'|'d')
 RECENTLY_ORDER=3            # 直近成約売買履歴表示（日）
 
@@ -19,7 +19,7 @@ ORDER_AMOUNT=50000
 # DX/GX判定時のヒストグラム連続増減カウント
 #
 #HIST_CONTINUING=4
-HIST_CONTINUING_B="5,6,3,5"
+HIST_CONTINUING_B="5,5,3,5"
 HIST_CONTINUING_S="5,4,3,5"
 #
 # 変化率の判定指標
@@ -31,7 +31,7 @@ PCT_CHANGE="0.001,0.002,0.003,0.004"    # 変化率閾値
 #
 # Volatility移動平均の判定指標
 PRD_VOLAT=5             # 移動平均算出期間
-PCT_VOLAT="0.01,0.01,0.01,0.01"         # 変動率閾値
+PCT_VOLAT="0.005,0.005,0.01,0.01"         # 変動率閾値
 #
 # 売買自動取引トリガー
 #
@@ -73,11 +73,13 @@ BTC_BUY_RATE="$BTC_BUY_RATE 0.0!gxSig:coincheck:0.002"
 BTC_BUY_RATE="$BTC_BUY_RATE -0.02!gxSig1.75:coincheck:0.002 -0.02!gxSig1.5:coincheck:0.002"
 BTC_BUY_RATE="$BTC_BUY_RATE -0.02!gxSig1.25:coincheck:0.002 -0.02!gxSig1.0:coincheck:0.002"
 BTC_BUY_RATE="$BTC_BUY_RATE -0.02!gxSig0.75:coincheck:0.002"
+BTC_BUY_RATE="$BTC_BUY_RATE -0.02!gxSig1.25:gmocoin:0.002 -0.02!gxSig1.0:gmocoin:0.002"
 
 BTC_SELL_RATE="$BTC_SELL_RATE 0.0!dxSig:coincheck:0.002"
 BTC_SELL_RATE="$BTC_SELL_RATE -0.02!dxSig1.75:coincheck:0.002 -0.02!dxSig1.5:coincheck:0.002"
 BTC_SELL_RATE="$BTC_SELL_RATE -0.02!dxSig1.25:coincheck:0.002 -0.02!dxSig1.0:coincheck:0.002"
 #BTC_SELL_RATE="$BTC_SELL_RATE -0.02!dxSig0.75:coincheck:0.002"
+BTC_SELL_RATE="$BTC_BUY_RATE -0.02!gxSig1.25:gmocoin:0.002 -0.02!gxSig1.0:gmocoin:0.002"
 
 ETH_BUY_RATE="$ETH_BUY_RATE 0.00!gxSig:gmocoin:0.04"
 ETH_BUY_RATE="$ETH_BUY_RATE -0.02!gxSig1.75:gmocoin:0.04 -0.02!gxSig1.5:gmocoin:0.04"
@@ -98,15 +100,25 @@ IOST_BUY_RATE="$IOST_BUY_RATE 0.52!im:coincheck:10000.0"
 IOST_SELL_RATE="$IOST_SELL_RATE 0.55!im:coincheck:10000.0"
 IOST_SELL_RATE="$IOST_SELL_RATE 0.62!im:coincheck:20000.0"
 IOST_SELL_RATE="$IOST_SELL_RATE 0.85!im:coincheck:20688.0"
+IOST_SELL_RATE="$IOST_SELL_RATE 0.28!im:coincheck:20000.0"
 
 #
 #<target-rate>マイナス時の比較基準レート
 #
 #BTC_STD_RATE=15900000.0
-BTC_STD_RATE=18150000.0
-ETH_STD_RATE=640000.0
+BTC_STD_RATE=17400000.0
+BTC_STD_RATE=17100000.0
+BTC_STD_RATE=16000000.0
+ETH_STD_RATE=635000.0
+ETH_STD_RATE=620000.0
+ETH_STD_RATE=608000.0
+ETH_STD_RATE=570000.0
+ETH_STD_RATE=530000.0
+ETH_STD_RATE=495000.0
 #IOST_STD_RATE=1.14
 IOST_STD_RATE=0.60
+IOST_STD_RATE=0.45
+IOST_STD_RATE=0.33
 MATIC_STD_RATE=60.0
 #
 #チャート表示

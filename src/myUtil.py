@@ -58,7 +58,7 @@ def help():
     print(" --- Option ---")
     print(" <import_t> :: history|account")
     print(" <print_t>  :: history|account")
-    print(" <create_t> :: account")
+    print(" <create_t> :: account|candle")
     print(" <calc_t>   :: account")
     print(" <delete_t> :: history|candle|account")
     print(" <exchange> :: coincheck|gmocoin")
