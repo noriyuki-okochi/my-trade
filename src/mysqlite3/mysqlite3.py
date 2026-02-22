@@ -1202,16 +1202,18 @@ class MyDb:
         mdfil['symbol'] = symbol.upper()
         mdfil = mdfil.sort_index(ascending=True)
         if last_date is not None:
+            # 指定日付以前（削除対象）のデータを追加対象とする
             mdfil = mdfil[mdfil.index < last_date]
         if mdfil.shape[0] == 0:
             print(f"insert_candlelogs:No new data to insert for {symbol}.")
         else:
+            # 追加データの最古日付のレコードが既に登録されていれば、同日付のレコードを削除する。
             fdate = mdfil.index[0]
             delete_sql = f"delete from candlelogs where symbol='{symbol}' and date(inserted_at) = date('{fdate}')"
             print(delete_sql)
             self.cur.execute(delete_sql)
             self.conn.commit()
-            #
+            # 日ローソク足データの追加
             mdfil.to_sql('candlelogs', self.conn, if_exists='append', index='inserted_at', method='multi', chunksize=1024)
             print(f"insert_candlelogs: {mdfil.shape[0]} new data to insert for {symbol}.")
         return mdfil.shape[0]
