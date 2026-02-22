@@ -1195,6 +1195,9 @@ class MyDb:
         params = {"sym": symbol.lower(), "limit": 0}
         #
         df = self.pandas_read_ratelogs(params)
+        if df.shape[0] == 0:
+            print(f"insert_candlelogs:No rate-log data for {symbol}.")
+            return 0
         # convert to OHLC
         mdf = df['rate'].resample('D').ohlc()
         mdf.columns = ['open_rate', 'high_rate', 'low_rate', 'close_rate']

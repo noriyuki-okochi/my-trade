@@ -523,6 +523,9 @@ def main():
                 print("通貨名を指定してください。")
                 print("usage: myUtil.py -create candle -sym <symbol>")
                 return
+            if symbol.lower() not in auto_coin_symbols:
+                print(f"通貨名は{auto_coin_symbols}のいずれかを指定してください。")
+                return
             print(f"ローソク足履歴データを登録します。")              
             inserted_count = db.insert_candlelogs(symbol)
             print(f">> {inserted_count} rows inserted.")                  
